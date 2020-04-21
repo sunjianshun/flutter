@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class PersistentBottomSheetTestState extends State<PersistentBottomSheetTest> {
   Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
-      body: const Text('Sheet')
+      body: const Text('Sheet'),
     );
   }
 }
@@ -140,9 +140,9 @@ void main() {
           color: const Color(0xff00ffff),
           child: const Hero(
             tag: kHeroTag,
-            child: Text('Home')
-          )
-        )
+            child: Text('Home'),
+          ),
+        ),
       ),
       '/settings': (_) => Scaffold(
         key: containerKey2,
@@ -151,16 +151,13 @@ void main() {
           color: const Color(0xffff00ff),
           child: const Hero(
             tag: kHeroTag,
-            child: Text('Settings')
-          )
-        )
+            child: Text('Settings'),
+          ),
+        ),
       ),
     };
 
-    await tester.pumpWidget(MaterialApp(
-      routes: routes,
-      theme: ThemeData(platform: TargetPlatform.iOS),
-    ));
+    await tester.pumpWidget(MaterialApp(routes: routes));
 
     Navigator.pushNamed(containerKey1.currentContext, '/settings');
 
@@ -199,9 +196,9 @@ void main() {
     settingsOffset = tester.getTopLeft(find.text('Settings'));
     expect(settingsOffset.dx, greaterThan(100.0));
     expect(settingsOffset.dy, 100.0);
-  });
+  }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
-  testWidgets('Check back gesture doesn\'t start during transitions', (WidgetTester tester) async {
+  testWidgets("Check back gesture doesn't start during transitions", (WidgetTester tester) async {
     final GlobalKey containerKey1 = GlobalKey();
     final GlobalKey containerKey2 = GlobalKey();
     final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
@@ -209,10 +206,7 @@ void main() {
       '/settings': (_) => Scaffold(key: containerKey2, body: const Text('Settings')),
     };
 
-    await tester.pumpWidget(MaterialApp(
-      routes: routes,
-      theme: ThemeData(platform: TargetPlatform.iOS),
-    ));
+    await tester.pumpWidget(MaterialApp(routes: routes));
 
     Navigator.pushNamed(containerKey1.currentContext, '/settings');
 
@@ -245,7 +239,7 @@ void main() {
 
     expect(find.text('Home'), isOnstage);
     expect(find.text('Settings'), findsNothing);
-  });
+  }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
   // Tests bug https://github.com/flutter/flutter/issues/6451
   testWidgets('Check back gesture with a persistent bottom sheet showing', (WidgetTester tester) async {
@@ -256,10 +250,7 @@ void main() {
       '/sheet': (_) => PersistentBottomSheetTest(key: containerKey2),
     };
 
-    await tester.pumpWidget(MaterialApp(
-      routes: routes,
-      theme: ThemeData(platform: TargetPlatform.iOS),
-    ));
+    await tester.pumpWidget(MaterialApp(routes: routes));
 
     Navigator.pushNamed(containerKey1.currentContext, '/sheet');
 
@@ -285,7 +276,7 @@ void main() {
     expect(find.text('Sheet'), isOnstage);
 
     // Show the bottom sheet.
-    final PersistentBottomSheetTestState sheet = containerKey2.currentState;
+    final PersistentBottomSheetTestState sheet = containerKey2.currentState as PersistentBottomSheetTestState;
     sheet.showBottomSheet();
 
     await tester.pump(const Duration(seconds: 1));
@@ -302,7 +293,7 @@ void main() {
 
     // Sheet did not call setState (since the gesture did nothing).
     expect(sheet.setStateCalled, isFalse);
-  });
+  }, variant: const TargetPlatformVariant(<TargetPlatform>{ TargetPlatform.iOS,  TargetPlatform.macOS }));
 
   testWidgets('Test completed future', (WidgetTester tester) async {
     final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{

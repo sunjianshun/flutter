@@ -55,5 +55,7 @@
   "collapsedIconTapHint": "Развернуть",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "Остался 1 символ",
-  "remainingTextFieldCharacterCountOther": "Осталось $remainingCount символа"
+  "remainingTextFieldCharacterCountOther": "Осталось $remainingCount символа",
+  "refreshIndicatorSemanticLabel": "Обновление",
+  "moreButtonTooltip": "Ещё"
 }

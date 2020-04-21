@@ -1,7 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+@TestOn('!chrome')
 import 'dart:async';
 import 'dart:io';
 
@@ -30,8 +31,8 @@ void _tests() {
           Semantics(
             selected: true,
             checked: true,
-            onTap: () {},
-            onDecrease: () {},
+            onTap: () { },
+            onDecrease: () { },
             value: 'test-value',
             increasedValue: 'test-increasedValue',
             decreasedValue: 'test-decreasedValue',
@@ -61,7 +62,7 @@ void _tests() {
       .trim() + ',';
 
     File findThisTestFile(Directory directory) {
-      for (FileSystemEntity entity in directory.listSync()) {
+      for (final FileSystemEntity entity in directory.listSync()) {
         if (entity is Directory) {
           final File childSearch = findThisTestFile(entity);
           if (childSearch != null) {
@@ -150,7 +151,7 @@ void _tests() {
         ignoreRect: true,
         ignoreTransform: true,
         ignoreId: true,
-      )
+      ),
     );
     semantics.dispose();
   });

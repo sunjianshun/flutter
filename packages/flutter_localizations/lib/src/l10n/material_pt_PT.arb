@@ -1,4 +1,5 @@
 {
+  "moreButtonTooltip": "Mais",
   "tabLabel": "Separador $tabIndex de $tabCount",
   "showAccountsLabel": "Mostrar contas",
   "hideAccountsLabel": "Ocultar contas",
@@ -50,5 +51,6 @@
   "collapsedIconTapHint": "Expandir",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "Resta 1 caráter",
-  "remainingTextFieldCharacterCountOther": "Restam $remainingCount carateres"
+  "remainingTextFieldCharacterCountOther": "Restam $remainingCount carateres",
+  "refreshIndicatorSemanticLabel": "Atualizar"
 }

@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:async';
 
-import '../globals.dart';
+import '../globals.dart' as globals;
 import '../plugins.dart';
 import '../project.dart';
 import '../runner/flutter_command.dart';
@@ -24,17 +24,20 @@ class InjectPluginsCommand extends FlutterCommand {
   final bool hidden;
 
   @override
+  Future<Set<DevelopmentArtifact>> get requiredArtifacts async => const <DevelopmentArtifact>{};
+
+  @override
   Future<FlutterCommandResult> runCommand() async {
-    final FlutterProject project = await FlutterProject.current();
-    refreshPluginsList(project);
-    await injectPlugins(project);
+    final FlutterProject project = FlutterProject.current();
+    refreshPluginsList(project, checkProjects: true);
+    await injectPlugins(project, checkProjects: true);
     final bool result = hasPlugins(project);
     if (result) {
-      printStatus('GeneratedPluginRegistrants successfully written.');
+      globals.printStatus('GeneratedPluginRegistrants successfully written.');
     } else {
-      printStatus('This project does not use plugins, no GeneratedPluginRegistrants have been created.');
+      globals.printStatus('This project does not use plugins, no GeneratedPluginRegistrants have been created.');
     }
 
-    return null;
+    return FlutterCommandResult.success();
   }
 }

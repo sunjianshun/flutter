@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 void verifyPaintPosition(GlobalKey key, Offset ideal, bool visible) {
-  final RenderSliver target = key.currentContext.findRenderObject();
-  expect(target.parent, isInstanceOf<RenderViewport>());
-  final SliverPhysicalParentData parentData = target.parentData;
+  final RenderSliver target = key.currentContext.findRenderObject() as RenderSliver;
+  expect(target.parent, isA<RenderViewport>());
+  final SliverPhysicalParentData parentData = target.parentData as SliverPhysicalParentData;
   final Offset actual = parentData.paintOffset;
   expect(actual, ideal);
   final SliverGeometry geometry = target.geometry;
@@ -23,7 +23,7 @@ void verifyActualBoxPosition(WidgetTester tester, Finder finder, int index, Rect
 }
 
 void main() {
-  testWidgets('Sliver appbars - floating - scroll offset doesn\'t change', (WidgetTester tester) async {
+  testWidgets("Sliver appbars - floating - scroll offset doesn't change", (WidgetTester tester) async {
     const double bigHeight = 1000.0;
     await tester.pumpWidget(
       Directionality(
@@ -174,7 +174,7 @@ void main() {
         ),
       ),
     );
-    final ScrollPositionWithSingleContext position = tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    final ScrollPositionWithSingleContext position = tester.state<ScrollableState>(find.byType(Scrollable)).position as ScrollPositionWithSingleContext;
 
     verifyPaintPosition(key1, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key2, const Offset(0.0, 1000.0), false);
@@ -187,7 +187,7 @@ void main() {
     verifyPaintPosition(key3, const Offset(0.0, 0.0), true);
 
     position.animateTo(bigHeight + delegate.maxExtent * 1.9, curve: Curves.linear, duration: const Duration(minutes: 1));
-    position.updateUserScrollDirection(ScrollDirection.forward); // ignore: invalid_use_of_protected_member
+    position.updateUserScrollDirection(ScrollDirection.forward);
     await tester.pumpAndSettle(const Duration(milliseconds: 1000));
     verifyPaintPosition(key1, const Offset(0.0, 0.0), false);
     verifyPaintPosition(key2, const Offset(0.0, 0.0), true);
@@ -203,9 +203,9 @@ void main() {
           physics: const BouncingScrollPhysics(),
           slivers: <Widget>[
             SliverPersistentHeader(delegate: TestDelegate(), floating: true),
-            const SliverList(
+            SliverList(
               delegate: SliverChildListDelegate(<Widget>[
-                SizedBox(
+                const SizedBox(
                   height: 300.0,
                   child: Text('X'),
                 ),
@@ -257,7 +257,7 @@ class RenderBigSliver extends RenderSliver {
     markNeedsLayout();
   }
 
-  double get paintExtent => (height - constraints.scrollOffset).clamp(0.0, constraints.remainingPaintExtent);
+  double get paintExtent => (height - constraints.scrollOffset).clamp(0.0, constraints.remainingPaintExtent) as double;
 
   @override
   void performLayout() {

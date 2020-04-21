@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -312,7 +312,6 @@ class ScrollDragController implements Drag {
       // May be null for proxied drags like via accessibility.
       return offset;
     }
-
     if (offset == 0.0) {
       if (motionStartDistanceThreshold != null &&
           _offsetSinceLastStop == null &&
@@ -342,7 +341,7 @@ class ScrollDragController implements Drag {
               // Ease into the motion when the threshold is initially broken
               // to avoid a visible jump.
               motionStartDistanceThreshold / 3.0,
-              offset.abs()
+              offset.abs(),
             ) * offset.sign;
           }
         } else {
@@ -425,7 +424,8 @@ class DragScrollActivity extends ScrollActivity {
   DragScrollActivity(
     ScrollActivityDelegate delegate,
     ScrollDragController controller,
-  ) : _controller = controller, super(delegate);
+  ) : _controller = controller,
+      super(delegate);
 
   ScrollDragController _controller;
 
@@ -433,21 +433,21 @@ class DragScrollActivity extends ScrollActivity {
   void dispatchScrollStartNotification(ScrollMetrics metrics, BuildContext context) {
     final dynamic lastDetails = _controller.lastDetails;
     assert(lastDetails is DragStartDetails);
-    ScrollStartNotification(metrics: metrics, context: context, dragDetails: lastDetails).dispatch(context);
+    ScrollStartNotification(metrics: metrics, context: context, dragDetails: lastDetails as DragStartDetails).dispatch(context);
   }
 
   @override
   void dispatchScrollUpdateNotification(ScrollMetrics metrics, BuildContext context, double scrollDelta) {
     final dynamic lastDetails = _controller.lastDetails;
     assert(lastDetails is DragUpdateDetails);
-    ScrollUpdateNotification(metrics: metrics, context: context, scrollDelta: scrollDelta, dragDetails: lastDetails).dispatch(context);
+    ScrollUpdateNotification(metrics: metrics, context: context, scrollDelta: scrollDelta, dragDetails: lastDetails as DragUpdateDetails).dispatch(context);
   }
 
   @override
   void dispatchOverscrollNotification(ScrollMetrics metrics, BuildContext context, double overscroll) {
     final dynamic lastDetails = _controller.lastDetails;
     assert(lastDetails is DragUpdateDetails);
-    OverscrollNotification(metrics: metrics, context: context, overscroll: overscroll, dragDetails: lastDetails).dispatch(context);
+    OverscrollNotification(metrics: metrics, context: context, overscroll: overscroll, dragDetails: lastDetails as DragUpdateDetails).dispatch(context);
   }
 
   @override
@@ -457,7 +457,7 @@ class DragScrollActivity extends ScrollActivity {
     ScrollEndNotification(
       metrics: metrics,
       context: context,
-      dragDetails: lastDetails is DragEndDetails ? lastDetails : null
+      dragDetails: lastDetails is DragEndDetails ? lastDetails : null,
     ).dispatch(context);
   }
 
@@ -507,7 +507,7 @@ class BallisticScrollActivity extends ScrollActivity {
     TickerProvider vsync,
   ) : super(delegate) {
     _controller = AnimationController.unbounded(
-      debugLabel: '$runtimeType',
+      debugLabel: kDebugMode ? objectRuntimeType(this, 'BallisticScrollActivity') : null,
       vsync: vsync,
     )
       ..addListener(_tick)
@@ -604,7 +604,7 @@ class DrivenScrollActivity extends ScrollActivity {
     _completer = Completer<void>();
     _controller = AnimationController.unbounded(
       value: from,
-      debugLabel: '$runtimeType',
+      debugLabel: objectRuntimeType(this, 'DrivenScrollActivity'),
       vsync: vsync,
     )
       ..addListener(_tick)

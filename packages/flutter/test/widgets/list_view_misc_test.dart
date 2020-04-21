@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,7 +84,7 @@ void main() {
               child: Container(
                 height: 350.0, // more than half the height of the test area
                 color: const Color(0xFF00FF00),
-              )
+              ),
             ),
             GestureDetector(
               onTap: () { second += 1; },
@@ -157,7 +157,7 @@ void main() {
       firstIndex: 3,
       lastIndex: 4,
       leadingScrollOffset: 25.0,
-      trailingScrollOffset: 26.0
+      trailingScrollOffset: 26.0,
     );
     expect(maxScrollOffset, equals(26.0));
   });
@@ -182,19 +182,19 @@ void main() {
                   SizedBox(
                     height: 150.0,
                     child: Center(
-                      child: Text('top')
+                      child: Text('top'),
                     ),
                   ),
                   SizedBox(
                     height: 200.0,
                     child: Center(
-                      child: Text('middle')
+                      child: Text('middle'),
                     ),
                   ),
                   SizedBox(
                     height: 150.0,
                     child: Center(
-                      child: Text('bottom')
+                      child: Text('bottom'),
                     ),
                   ),
                 ],

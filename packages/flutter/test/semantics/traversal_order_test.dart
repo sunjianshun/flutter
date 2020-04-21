@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,18 +15,21 @@ void main() {
       MaterialApp(
         home: Column(
           children: List<Widget>.generate(3, (int column) {
-            return Row(children: List<Widget>.generate(3, (int row) {
-              return Semantics(
-                child: SizedBox(
-                  width: 50.0,
-                  height: 50.0,
-                  child: Text('$column - $row'),
-                ),
-              );
-          }));
-        }),
+            return Row(
+              children: List<Widget>.generate(3, (int row) {
+                return Semantics(
+                  child: SizedBox(
+                    width: 50.0,
+                    height: 50.0,
+                    child: Text('$column - $row'),
+                  ),
+                );
+              }),
+            );
+          }),
+        ),
       ),
-    ));
+    );
 
     final TestSemantics expected = TestSemantics.root(
       children: <TestSemantics>[

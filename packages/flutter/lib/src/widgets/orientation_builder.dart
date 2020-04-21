@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,13 @@ typedef OrientationWidgetBuilder = Widget Function(BuildContext context, Orienta
 ///
 /// See also:
 ///
-/// * [LayoutBuilder], which exposes the complete constraints, not just the
-///   orientation.
-/// * [CustomSingleChildLayout], which positions its child during layout.
-/// * [CustomMultiChildLayout], with which you can define the precise layout
-///   of a list of children during the layout phase.
+///  * [LayoutBuilder], which exposes the complete constraints, not just the
+///    orientation.
+///  * [CustomSingleChildLayout], which positions its child during layout.
+///  * [CustomMultiChildLayout], with which you can define the precise layout
+///    of a list of children during the layout phase.
+///  * [MediaQueryData.orientation], which exposes whether the device is in
+///    landscape or portrait mode.
 class OrientationBuilder extends StatelessWidget {
   /// Creates an orientation builder.
   ///

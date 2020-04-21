@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ void _tests() {
                     expandedHeight: appBarExpandedHeight,
                     title: Text('Semantics Test with Slivers'),
                   ),
-                   SliverList(
+                  SliverList(
                     delegate: SliverChildListDelegate(listChildren),
                   ),
                 ],
@@ -79,6 +79,9 @@ void _tests() {
                 children: <TestSemantics>[
                   TestSemantics(
                     id: 9,
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
                     actions: <SemanticsAction>[SemanticsAction.scrollUp],
                     children: <TestSemantics>[
                       TestSemantics(
@@ -165,6 +168,7 @@ void _tests() {
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
                     ],
+                    flags: <SemanticsFlag>[SemanticsFlag.hasImplicitScrolling],
                     children: <TestSemantics>[
                       TestSemantics(
                         id: 3,
@@ -222,6 +226,9 @@ void _tests() {
                 children: <TestSemantics>[
                   TestSemantics(
                     id: 9,
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
                     actions: <SemanticsAction>[
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
@@ -327,6 +334,9 @@ void _tests() {
               TestSemantics(
                 children: <TestSemantics>[
                   TestSemantics(
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
                     actions: <SemanticsAction>[
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
@@ -512,6 +522,7 @@ void _tests() {
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
                     ],
+                    flags: <SemanticsFlag>[SemanticsFlag.hasImplicitScrolling],
                     children: <TestSemantics>[
                       TestSemantics(
                         flags: <SemanticsFlag>[SemanticsFlag.isHidden],
@@ -588,7 +599,8 @@ void _tests() {
                   expandedHeight: 100.0,
                   title: Text('AppBar'),
                 ),
-              ]..addAll(slivers),
+                ...slivers,
+              ],
             ),
           ),
         ),
@@ -621,6 +633,7 @@ void _tests() {
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
                     ],
+                    flags: <SemanticsFlag>[SemanticsFlag.hasImplicitScrolling],
                     children: <TestSemantics>[
                       TestSemantics(
                         flags: <SemanticsFlag>[SemanticsFlag.isHidden],
@@ -715,6 +728,9 @@ void _tests() {
               TestSemantics(
                 children: <TestSemantics>[
                   TestSemantics(
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
                     actions: <SemanticsAction>[
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
@@ -809,7 +825,8 @@ void _tests() {
                   expandedHeight: 100.0,
                   title: Text('AppBar'),
                 ),
-              ]..addAll(slivers),
+                ...slivers,
+              ],
             ),
           ),
         ),
@@ -825,8 +842,13 @@ void _tests() {
               TestSemantics(
                 children: <TestSemantics>[
                   TestSemantics(
-                    actions: <SemanticsAction>[SemanticsAction.scrollUp,
-                    SemanticsAction.scrollDown],
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
+                    actions: <SemanticsAction>[
+                      SemanticsAction.scrollUp,
+                      SemanticsAction.scrollDown,
+                    ],
                     children: <TestSemantics>[
                       TestSemantics(
                         flags: <SemanticsFlag>[SemanticsFlag.isHidden],
@@ -977,6 +999,7 @@ void _tests() {
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,
                     ],
+                    flags: <SemanticsFlag>[SemanticsFlag.hasImplicitScrolling],
                     children: <TestSemantics>[
                       TestSemantics(
                         flags: <SemanticsFlag>[SemanticsFlag.isHidden],
@@ -1031,6 +1054,9 @@ void _tests() {
               TestSemantics(
                 children: <TestSemantics>[
                   TestSemantics(
+                    flags: <SemanticsFlag>[
+                      SemanticsFlag.hasImplicitScrolling,
+                    ],
                     actions: <SemanticsAction>[
                       SemanticsAction.scrollUp,
                       SemanticsAction.scrollDown,

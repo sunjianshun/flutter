@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Flutter Authors. All rights reserved.
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -22,6 +22,15 @@ $engineStamp = "$cachePath\engine-dart-sdk.stamp"
 $engineVersion = (Get-Content "$flutterRoot\bin\internal\engine.version")
 
 $oldDartSdkPrefix = "dart-sdk.old"
+
+# Make sure that PowerShell has expected version.
+$psMajorVersionRequired = 5
+$psMajorVersionLocal = $PSVersionTable.PSVersion.Major
+if ($psMajorVersionLocal -lt $psMajorVersionRequired) {
+    Write-Host "Flutter requires PowerShell $psMajorVersionRequired.0 or newer."
+    Write-Host "See https://flutter.dev/docs/get-started/install/windows for more."
+    return
+}
 
 if ((Test-Path $engineStamp) -and ($engineVersion -eq (Get-Content $engineStamp))) {
     return
@@ -50,7 +59,14 @@ Try {
 }
 Catch {
     Write-Host "Downloading the Dart SDK using the BITS service failed, retrying with WebRequest..."
+    # Invoke-WebRequest is very slow when the progress bar is visible - a 28
+    # second download can become a 33 minute download. Disable it with
+    # $ProgressPreference and then restore the original value afterwards.
+    # https://github.com/flutter/flutter/issues/37789
+    $OriginalProgressPreference = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
     Invoke-WebRequest -Uri $dartSdkUrl -OutFile $dartSdkZip
+    $ProgressPreference = $OriginalProgressPreference
 }
 
 Write-Host "Unzipping Dart SDK..."

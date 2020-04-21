@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 void verifyPaintPosition(GlobalKey key, Offset ideal, bool visible) {
-  final RenderSliver target = key.currentContext.findRenderObject();
-  expect(target.parent, isInstanceOf<RenderViewport>());
-  final SliverPhysicalParentData parentData = target.parentData;
+  final RenderSliver target = key.currentContext.findRenderObject() as RenderSliver;
+  expect(target.parent, isA<RenderViewport>());
+  final SliverPhysicalParentData parentData = target.parentData as SliverPhysicalParentData;
   final Offset actual = parentData.paintOffset;
   expect(actual, ideal);
   final SliverGeometry geometry = target.geometry;
@@ -90,8 +90,8 @@ void main() {
         ' │   GrowthDirection.forward, ScrollDirection.idle, scrollOffset:\n'
         ' │   0.0, remainingPaintExtent: 600.0, crossAxisExtent: 800.0,\n'
         ' │   crossAxisDirection: AxisDirection.right,\n'
-        ' │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0\n'
-        ' │   cacheOrigin: 0.0 )\n'
+        ' │   viewportMainAxisExtent: 600.0, remainingCacheExtent: 850.0,\n'
+        ' │   cacheOrigin: 0.0)\n'
         ' │ geometry: SliverGeometry(scrollExtent: 200.0, paintExtent: 200.0,\n'
         ' │   maxPaintExtent: 200.0, hasVisualOverflow: true, cacheExtent:\n'
         ' │   200.0)\n'
@@ -164,7 +164,7 @@ void main() {
     verifyPaintPosition(key1, const Offset(0.0, 0.0), false);
     verifyPaintPosition(key2, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key3, const Offset(0.0, 100.0), true);
-    verifyActualBoxPosition(tester, find.byType(Container), 1, Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
+    verifyActualBoxPosition(tester, find.byType(Container), 1, const Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
     verifyPaintPosition(key4, const Offset(0.0, 300.0), true);
     verifyPaintPosition(key5, const Offset(0.0, 850.0), false);
     position.animateTo(700.0, curve: Curves.linear, duration: const Duration(minutes: 1));
@@ -172,7 +172,7 @@ void main() {
     verifyPaintPosition(key1, const Offset(0.0, 0.0), false);
     verifyPaintPosition(key2, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key3, const Offset(0.0, 100.0), true);
-    verifyActualBoxPosition(tester, find.byType(Container), 1, Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
+    verifyActualBoxPosition(tester, find.byType(Container), 1, const Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
     verifyPaintPosition(key4, const Offset(0.0, 250.0), true);
     verifyPaintPosition(key5, const Offset(0.0, 800.0), false);
     position.animateTo(750.0, curve: Curves.linear, duration: const Duration(minutes: 1));
@@ -180,7 +180,7 @@ void main() {
     verifyPaintPosition(key1, const Offset(0.0, 0.0), false);
     verifyPaintPosition(key2, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key3, const Offset(0.0, 100.0), true);
-    verifyActualBoxPosition(tester, find.byType(Container), 1, Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
+    verifyActualBoxPosition(tester, find.byType(Container), 1, const Rect.fromLTWH(0.0, 100.0, 800.0, 200.0));
     verifyPaintPosition(key4, const Offset(0.0, 200.0), true);
     verifyPaintPosition(key5, const Offset(0.0, 750.0), false);
     position.animateTo(800.0, curve: Curves.linear, duration: const Duration(minutes: 1));
@@ -209,7 +209,7 @@ void main() {
     verifyPaintPosition(key1, const Offset(0.0, 0.0), false);
     verifyPaintPosition(key2, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key3, const Offset(0.0, 100.0), true);
-    verifyActualBoxPosition(tester, find.byType(Container), 1, Rect.fromLTWH(0.0, 100.0, 800.0, 100.0));
+    verifyActualBoxPosition(tester, find.byType(Container), 1, const Rect.fromLTWH(0.0, 100.0, 800.0, 100.0));
     verifyPaintPosition(key4, const Offset(0.0, 0.0), true);
     verifyPaintPosition(key5, const Offset(0.0, 550.0), true);
   });
@@ -258,9 +258,9 @@ void main() {
           physics: const BouncingScrollPhysics(),
           slivers: <Widget>[
             SliverPersistentHeader(delegate: TestDelegate(), pinned: true),
-            const SliverList(
+            SliverList(
               delegate: SliverChildListDelegate(<Widget>[
-                SizedBox(
+                const SizedBox(
                   height: 300.0,
                   child: Text('X'),
                 ),
@@ -321,7 +321,7 @@ class TestDelegateThatCanThrow extends SliverPersistentHeaderDelegate {
 
   @override
   double get minExtent {
-   return shouldThrow ? throw FlutterError('Unavailable minExtent') : 100.0;
+    return shouldThrow ? throw FlutterError('Unavailable minExtent') : 100.0;
   }
 
   @override
@@ -346,7 +346,7 @@ class RenderBigSliver extends RenderSliver {
     markNeedsLayout();
   }
 
-  double get paintExtent => (height - constraints.scrollOffset).clamp(0.0, constraints.remainingPaintExtent);
+  double get paintExtent => (height - constraints.scrollOffset).clamp(0.0, constraints.remainingPaintExtent) as double;
 
   @override
   void performLayout() {

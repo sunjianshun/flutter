@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@ import 'framework.dart';
 ///
 /// See also:
 ///
-///   * [Layer.find], for an example of how this value is retrieved.
-///   * [AnnotatedRegionLayer], the layer pushed into the layer tree.
+///  * [Layer.find], for an example of how this value is retrieved.
+///  * [AnnotatedRegionLayer], the layer pushed into the layer tree.
 class AnnotatedRegion<T> extends SingleChildRenderObjectWidget {
   /// Creates a new annotated region to insert [value] into the layer tree.
   ///
@@ -39,7 +39,7 @@ class AnnotatedRegion<T> extends SingleChildRenderObjectWidget {
   ///
   /// See also:
   ///
-  ///   * [AnnotatedRegionLayer], for a description of this behavior.
+  ///  * [AnnotatedRegionLayer], for a description of this behavior.
   final bool sized;
 
   @override
@@ -54,4 +54,3 @@ class AnnotatedRegion<T> extends SingleChildRenderObjectWidget {
       ..sized = sized;
   }
 }
-

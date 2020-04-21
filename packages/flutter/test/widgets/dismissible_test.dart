@@ -1,7 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,15 +15,23 @@ List<int> dismissedItems = <int>[];
 Widget background;
 const double crossAxisEndOffset = 0.5;
 
-Widget buildTest({ double startToEndThreshold, TextDirection textDirection = TextDirection.ltr }) {
+Widget buildTest({
+  double startToEndThreshold,
+  TextDirection textDirection = TextDirection.ltr,
+  Future<bool> Function(BuildContext context, DismissDirection direction) confirmDismiss,
+}) {
   return Directionality(
     textDirection: textDirection,
     child: StatefulBuilder(
       builder: (BuildContext context, StateSetter setState) {
         Widget buildDismissibleItem(int item) {
           return Dismissible(
+            dragStartBehavior: DragStartBehavior.down,
             key: ValueKey<int>(item),
             direction: dismissDirection,
+            confirmDismiss: confirmDismiss == null ? null : (DismissDirection direction) {
+              return confirmDismiss(context, direction);
+            },
             onDismissed: (DismissDirection direction) {
               setState(() {
                 reportedDismissDirection = direction;
@@ -49,6 +58,7 @@ Widget buildTest({ double startToEndThreshold, TextDirection textDirection = Tex
         return Container(
           padding: const EdgeInsets.all(10.0),
           child: ListView(
+            dragStartBehavior: DragStartBehavior.down,
             scrollDirection: scrollDirection,
             itemExtent: itemExtent,
             children: <int>[0, 1, 2, 3, 4]
@@ -127,7 +137,9 @@ Future<void> flingElementFromZero(WidgetTester tester, Finder finder, { @require
   await flingElement(tester, finder, gestureDirection: gestureDirection, initialOffsetFactor: -1.0);
 }
 
-Future<void> dismissItem(WidgetTester tester, int item, {
+Future<void> dismissItem(
+  WidgetTester tester,
+  int item, {
   @required AxisDirection gestureDirection,
   DismissMethod mechanism = dismissElement,
 }) async {
@@ -144,9 +156,11 @@ Future<void> dismissItem(WidgetTester tester, int item, {
   await tester.pump(); // rebuild after the callback removes the entry
 }
 
-Future<void> checkFlingItemBeforeMovementEnd(WidgetTester tester, int item, {
+Future<void> checkFlingItemBeforeMovementEnd(
+  WidgetTester tester,
+  int item, {
   @required AxisDirection gestureDirection,
-  DismissMethod mechanism = rollbackElement
+  DismissMethod mechanism = rollbackElement,
 }) async {
   assert(gestureDirection != null);
   final Finder itemFinder = find.text(item.toString());
@@ -158,9 +172,11 @@ Future<void> checkFlingItemBeforeMovementEnd(WidgetTester tester, int item, {
   await tester.pump(const Duration(milliseconds: 100));
 }
 
-Future<void> checkFlingItemAfterMovement(WidgetTester tester, int item, {
+Future<void> checkFlingItemAfterMovement(
+  WidgetTester tester,
+  int item, {
   @required AxisDirection gestureDirection,
-  DismissMethod mechanism = rollbackElement
+  DismissMethod mechanism = rollbackElement,
 }) async {
   assert(gestureDirection != null);
   final Finder itemFinder = find.text(item.toString());
@@ -192,13 +208,14 @@ Future<void> rollbackElement(WidgetTester tester, Finder finder, { @required Axi
 }
 
 class Test1215DismissibleWidget extends StatelessWidget {
-  const Test1215DismissibleWidget(this.text);
+  const Test1215DismissibleWidget(this.text, { Key key }) : super(key: key);
 
   final String text;
 
   @override
   Widget build(BuildContext context) {
     return Dismissible(
+      dragStartBehavior: DragStartBehavior.down,
       key: ObjectKey(text),
       child: AspectRatio(
         aspectRatio: 1.0,
@@ -655,5 +672,128 @@ void main() {
     await checkFlingItemAfterMovement(tester, 1, gestureDirection: AxisDirection.right, mechanism: rollbackElement);
     expect(find.text('1'), findsOneWidget);
     expect(dismissedItems, isEmpty);
+  });
+
+  testWidgets('confirmDismiss returns values: true, false, null', (WidgetTester tester) async {
+    scrollDirection = Axis.vertical;
+    dismissDirection = DismissDirection.horizontal;
+    DismissDirection confirmDismissDirection;
+
+    Widget buildFrame(bool confirmDismissValue) {
+      return buildTest(
+        confirmDismiss: (BuildContext context, DismissDirection dismissDirection) {
+          confirmDismissDirection = dismissDirection;
+          return Future<bool>.value(confirmDismissValue);
+        }
+      );
+    }
+
+    // Dismiss is confirmed IFF confirmDismiss() returns true.
+    await tester.pumpWidget(buildFrame(true));
+    expect(dismissedItems, isEmpty);
+
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.right, mechanism: flingElement);
+    expect(find.text('0'), findsNothing);
+    expect(dismissedItems, equals(<int>[0]));
+    expect(reportedDismissDirection, DismissDirection.startToEnd);
+    expect(confirmDismissDirection, DismissDirection.startToEnd);
+
+    await dismissItem(tester, 1, gestureDirection: AxisDirection.left, mechanism: flingElement);
+    expect(find.text('1'), findsNothing);
+    expect(dismissedItems, equals(<int>[0, 1]));
+    expect(reportedDismissDirection, DismissDirection.endToStart);
+    expect(confirmDismissDirection, DismissDirection.endToStart);
+
+    // Dismiss is not confirmed if confirmDismiss() returns false
+    dismissedItems = <int>[];
+    await tester.pumpWidget(buildFrame(false));
+
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.right, mechanism: flingElement);
+    expect(find.text('0'), findsOneWidget);
+    expect(dismissedItems, isEmpty);
+    expect(confirmDismissDirection, DismissDirection.startToEnd);
+
+    await dismissItem(tester, 1, gestureDirection: AxisDirection.left, mechanism: flingElement);
+    expect(find.text('1'), findsOneWidget);
+    expect(dismissedItems, isEmpty);
+    expect(confirmDismissDirection, DismissDirection.endToStart);
+
+    // Dismiss is not confirmed if confirmDismiss() returns null
+    dismissedItems = <int>[];
+    await tester.pumpWidget(buildFrame(null));
+
+    await dismissItem(tester, 0, gestureDirection: AxisDirection.right, mechanism: flingElement);
+    expect(find.text('0'), findsOneWidget);
+    expect(dismissedItems, isEmpty);
+    expect(confirmDismissDirection, DismissDirection.startToEnd);
+
+    await dismissItem(tester, 1, gestureDirection: AxisDirection.left, mechanism: flingElement);
+    expect(find.text('1'), findsOneWidget);
+    expect(dismissedItems, isEmpty);
+    expect(confirmDismissDirection, DismissDirection.endToStart);
+  });
+
+  testWidgets('setState that does not remove the Dismissible from tree should throws Error', (WidgetTester tester) async {
+    scrollDirection = Axis.vertical;
+    dismissDirection = DismissDirection.horizontal;
+
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: StatefulBuilder(
+        builder: (BuildContext context, StateSetter setState) {
+          return ListView(
+            dragStartBehavior: DragStartBehavior.down,
+            scrollDirection: scrollDirection,
+            itemExtent: itemExtent,
+            children: <Widget>[
+              Dismissible(
+                dragStartBehavior: DragStartBehavior.down,
+                key: const ValueKey<int>(1),
+                direction: dismissDirection,
+                onDismissed: (DismissDirection direction) {
+                  setState(() {
+                    reportedDismissDirection = direction;
+                    expect(dismissedItems.contains(1), isFalse);
+                    dismissedItems.add(1);
+                  });
+                },
+                background: background,
+                dismissThresholds: const <DismissDirection, double>{},
+                crossAxisEndOffset: crossAxisEndOffset,
+                child: Container(
+                  width: itemExtent,
+                  height: itemExtent,
+                  child: Text(1.toString()),
+                ),
+              ),
+            ]
+          );
+        },
+      ),
+    ));
+    expect(dismissedItems, isEmpty);
+    await dismissItem(tester, 1, gestureDirection: AxisDirection.right);
+    expect(dismissedItems, equals(<int>[1]));
+    final dynamic exception =  tester.takeException();
+    expect(exception, isNotNull);
+    expect(exception, isFlutterError);
+    final FlutterError error = exception as FlutterError;
+    expect(error.diagnostics.last.level, DiagnosticLevel.hint);
+    expect(
+      error.diagnostics.last.toStringDeep(),
+      equalsIgnoringHashCodes(
+        'Make sure to implement the onDismissed handler and to immediately\n'
+        'remove the Dismissible widget from the application once that\n'
+        'handler has fired.\n',
+      ),
+    );
+    expect(
+      error.toStringDeep(),
+      'FlutterError\n'
+      '   A dismissed Dismissible widget is still part of the tree.\n'
+      '   Make sure to implement the onDismissed handler and to immediately\n'
+      '   remove the Dismissible widget from the application once that\n'
+      '   handler has fired.\n',
+    );
   });
 }

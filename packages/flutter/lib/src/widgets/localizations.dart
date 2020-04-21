@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:ui' show Locale;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/rendering.dart';
 
 import 'basic.dart';
 import 'binding.dart';
@@ -44,16 +45,16 @@ Future<Map<Type, dynamic>> _loadAll(Locale locale, Iterable<LocalizationsDelegat
 
   // Only load the first delegate for each delegate type that supports
   // locale.languageCode.
-  final Set<Type> types = Set<Type>();
+  final Set<Type> types = <Type>{};
   final List<LocalizationsDelegate<dynamic>> delegates = <LocalizationsDelegate<dynamic>>[];
-  for (LocalizationsDelegate<dynamic> delegate in allDelegates) {
+  for (final LocalizationsDelegate<dynamic> delegate in allDelegates) {
     if (!types.contains(delegate.type) && delegate.isSupported(locale)) {
       types.add(delegate.type);
       delegates.add(delegate);
     }
   }
 
-  for (LocalizationsDelegate<dynamic> delegate in delegates) {
+  for (final LocalizationsDelegate<dynamic> delegate in delegates) {
     final Future<dynamic> inputValue = delegate.load(locale);
     dynamic completedValue;
     final Future<dynamic> futureValue = inputValue.then<dynamic>((dynamic value) {
@@ -134,7 +135,7 @@ abstract class LocalizationsDelegate<T> {
   Type get type => T;
 
   @override
-  String toString() => '$runtimeType[$type]';
+  String toString() => '${objectRuntimeType(this, 'LocalizationsDelegate')}[$type]';
 }
 
 /// Interface for localized resource values for the lowest levels of the Flutter
@@ -181,16 +182,19 @@ class _WidgetsLocalizationsDelegate extends LocalizationsDelegate<WidgetsLocaliz
 
   @override
   bool shouldReload(_WidgetsLocalizationsDelegate old) => false;
+
+  @override
+  String toString() => 'DefaultWidgetsLocalizations.delegate(en_US)';
 }
 
 /// US English localizations for the widgets library.
 ///
 /// See also:
 ///
-/// * [GlobalWidgetsLocalizations], which provides widgets localizations for
-///   many languages.
-/// * [WidgetsApp.delegates], which automatically includes
-///   [DefaultWidgetsLocalizations.delegate] by default.
+///  * [GlobalWidgetsLocalizations], which provides widgets localizations for
+///    many languages.
+///  * [WidgetsApp.delegates], which automatically includes
+///    [DefaultWidgetsLocalizations.delegate] by default.
 class DefaultWidgetsLocalizations implements WidgetsLocalizations {
   /// Construct an object that defines the localized values for the widgets
   /// library for US English (only).
@@ -220,7 +224,7 @@ class DefaultWidgetsLocalizations implements WidgetsLocalizations {
 }
 
 class _LocalizationsScope extends InheritedWidget {
-  const _LocalizationsScope ({
+  const _LocalizationsScope({
     Key key,
     @required this.locale,
     @required this.localizationsState,
@@ -294,7 +298,7 @@ class _LocalizationsScope extends InheritedWidget {
 /// `Localizations.of(context)` will be rebuilt after the resources
 /// for the new locale have been loaded.
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// This following class is defined in terms of the
 /// [Dart `intl` package](https://github.com/dart-lang/intl). Using the `intl`
@@ -321,6 +325,7 @@ class _LocalizationsScope extends InheritedWidget {
 ///   // ... more Intl.message() methods like title()
 /// }
 /// ```
+/// {@end-tool}
 /// A class based on the `intl` package imports a generated message catalog that provides
 /// the `initializeMessages()` function and the per-locale backing store for `Intl.message()`.
 /// The message catalog is produced by an `intl` tool that analyzes the source code for
@@ -407,7 +412,7 @@ class Localizations extends StatefulWidget {
   static Locale localeOf(BuildContext context, { bool nullOk = false }) {
     assert(context != null);
     assert(nullOk != null);
-    final _LocalizationsScope scope = context.inheritFromWidgetOfExactType(_LocalizationsScope);
+    final _LocalizationsScope scope = context.dependOnInheritedWidgetOfExactType<_LocalizationsScope>();
     if (nullOk && scope == null)
       return null;
     assert(scope != null, 'a Localizations ancestor was not found');
@@ -418,7 +423,7 @@ class Localizations extends StatefulWidget {
   // Localizations.override factory constructor.
   static List<LocalizationsDelegate<dynamic>> _delegatesOf(BuildContext context) {
     assert(context != null);
-    final _LocalizationsScope scope = context.inheritFromWidgetOfExactType(_LocalizationsScope);
+    final _LocalizationsScope scope = context.dependOnInheritedWidgetOfExactType<_LocalizationsScope>();
     assert(scope != null, 'a Localizations ancestor was not found');
     return List<LocalizationsDelegate<dynamic>>.from(scope.localizationsState.widget.delegates);
   }
@@ -441,7 +446,7 @@ class Localizations extends StatefulWidget {
   static T of<T>(BuildContext context, Type type) {
     assert(context != null);
     assert(type != null);
-    final _LocalizationsScope scope = context.inheritFromWidgetOfExactType(_LocalizationsScope);
+    final _LocalizationsScope scope = context.dependOnInheritedWidgetOfExactType<_LocalizationsScope>();
     return scope?.localizationsState?.resourcesFor<T>(type);
   }
 
@@ -515,27 +520,27 @@ class _LocalizationsState extends State<Localizations> {
       // have finished loading. Until then the old locale will continue to be used.
       // - If we're running at app startup time then defer reporting the first
       // "useful" frame until after the async load has completed.
-      WidgetsBinding.instance.deferFirstFrameReport();
+      RendererBinding.instance.deferFirstFrame();
       typeToResourcesFuture.then<void>((Map<Type, dynamic> value) {
-        WidgetsBinding.instance.allowFirstFrameReport();
-        if (!mounted)
-          return;
-        setState(() {
-          _typeToResources = value;
-          _locale = locale;
-        });
+        if (mounted) {
+          setState(() {
+            _typeToResources = value;
+            _locale = locale;
+          });
+        }
+        RendererBinding.instance.allowFirstFrame();
       });
     }
   }
 
   T resourcesFor<T>(Type type) {
     assert(type != null);
-    final T resources = _typeToResources[type];
+    final T resources = _typeToResources[type] as T;
     return resources;
   }
 
   TextDirection get _textDirection {
-    final WidgetsLocalizations resources = _typeToResources[WidgetsLocalizations];
+    final WidgetsLocalizations resources = _typeToResources[WidgetsLocalizations] as WidgetsLocalizations;
     assert(resources != null);
     return resources.textDirection;
   }

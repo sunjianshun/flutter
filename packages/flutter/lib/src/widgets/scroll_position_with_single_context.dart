@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -92,7 +91,7 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
       return;
     }
     activity.updateDelegate(this);
-    final ScrollPositionWithSingleContext typedOther = other;
+    final ScrollPositionWithSingleContext typedOther = other as ScrollPositionWithSingleContext;
     _userScrollDirection = typedOther._userScrollDirection;
     assert(_currentDrag == null);
     if (typedOther._currentDrag != null) {
@@ -160,6 +159,7 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
   ///
   /// If this changes the value, then a [UserScrollNotification] is dispatched.
   @protected
+  @visibleForTesting
   void updateUserScrollDirection(ScrollDirection value) {
     assert(value != null);
     if (userScrollDirection == value)
@@ -169,7 +169,8 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
   }
 
   @override
-  Future<void> animateTo(double to, {
+  Future<void> animateTo(
+    double to, {
     @required Duration duration,
     @required Curve curve,
   }) {
@@ -197,7 +198,6 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     if (pixels != value) {
       final double oldPixels = pixels;
       forcePixels(value);
-      notifyListeners();
       didStartScroll();
       didUpdateScrollPositionBy(pixels - oldPixels);
       didEndScroll();
@@ -205,14 +205,13 @@ class ScrollPositionWithSingleContext extends ScrollPosition implements ScrollAc
     goBallistic(0.0);
   }
 
-  @Deprecated('This will lead to bugs.')
+  @Deprecated('This will lead to bugs.') // ignore: flutter_deprecation_syntax, https://github.com/flutter/flutter/issues/44609
   @override
   void jumpToWithoutSettling(double value) {
     goIdle();
     if (pixels != value) {
       final double oldPixels = pixels;
       forcePixels(value);
-      notifyListeners();
       didStartScroll();
       didUpdateScrollPositionBy(pixels - oldPixels);
       didEndScroll();

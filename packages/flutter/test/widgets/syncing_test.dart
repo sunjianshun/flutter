@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart';
 
 class TestWidget extends StatefulWidget {
-  const TestWidget({ this.child, this.persistentState, this.syncedState });
+  const TestWidget({
+    Key key,
+    this.child,
+    this.persistentState,
+    this.syncedState,
+  }) : super(key: key);
 
   final Widget child;
   final int persistentState;
@@ -49,10 +54,10 @@ void main() {
         child: Container(
           child: TestWidget(
             persistentState: 1,
-            child: Container()
-          )
-        )
-      )
+            child: Container(),
+          ),
+        ),
+      ),
     );
 
     final TestWidgetState state = tester.state(find.byType(TestWidget));
@@ -65,10 +70,10 @@ void main() {
         child: Container(
           child: TestWidget(
             persistentState: 2,
-            child: Container()
-          )
-        )
-      )
+            child: Container(),
+          ),
+        ),
+      ),
     );
 
     expect(state.persistentState, equals(1));
@@ -83,10 +88,10 @@ void main() {
         child: Container(
           child: TestWidget(
             persistentState: 10,
-            child: Container()
-          )
-        )
-      )
+            child: Container(),
+          ),
+        ),
+      ),
     );
 
     TestWidgetState state = tester.state(find.byType(TestWidget));
@@ -98,9 +103,9 @@ void main() {
       Container(
         child: TestWidget(
           persistentState: 11,
-          child: Container()
-        )
-      )
+          child: Container(),
+        ),
+      ),
     );
 
     state = tester.state(find.byType(TestWidget));
@@ -124,14 +129,14 @@ void main() {
         children: <Widget>[
           Container(
             key: keyA,
-            child: a
+            child: a,
           ),
           Container(
             key: keyB,
-            child: b
-          )
-        ]
-      )
+            child: b,
+          ),
+        ],
+      ),
     );
 
     TestWidgetState first, second;
@@ -151,14 +156,14 @@ void main() {
         children: <Widget>[
           Container(
             key: keyA,
-            child: a
+            child: a,
           ),
           Container(
             key: keyB,
-            child: b
-          )
-        ]
-      )
+            child: b,
+          ),
+        ],
+      ),
     );
 
     first = tester.state(find.byWidget(a));
@@ -180,14 +185,14 @@ void main() {
         children: <Widget>[
           Container(
             key: keyA,
-            child: b
+            child: b,
           ),
           Container(
             key: keyB,
-            child: a
-          )
-        ]
-      )
+            child: a,
+          ),
+        ],
+      ),
     );
 
     first = tester.state(find.byWidget(b));

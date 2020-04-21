@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -94,10 +94,8 @@ Widget buildFrame(SingleChildLayoutDelegate delegate) {
 }
 
 void main() {
-  testWidgets('Control test for CustomSingleChildLayout',
-      (WidgetTester tester) async {
-    final TestSingleChildLayoutDelegate delegate =
-        TestSingleChildLayoutDelegate();
+  testWidgets('Control test for CustomSingleChildLayout', (WidgetTester tester) async {
+    final TestSingleChildLayoutDelegate delegate = TestSingleChildLayoutDelegate();
     await tester.pumpWidget(buildFrame(delegate));
 
     expect(delegate.constraintsFromGetSize.minWidth, 0.0);
@@ -117,8 +115,7 @@ void main() {
     expect(delegate.childSizeFromGetPositionForChild.height, 400.0);
   });
 
-  testWidgets('Test SingleChildDelegate shouldRelayout method',
-      (WidgetTester tester) async {
+  testWidgets('Test SingleChildDelegate shouldRelayout method', (WidgetTester tester) async {
     TestSingleChildLayoutDelegate delegate =
         TestSingleChildLayoutDelegate();
     await tester.pumpWidget(buildFrame(delegate));

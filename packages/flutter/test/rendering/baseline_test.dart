@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,10 @@ void main() {
       child: parent = RenderBaseline(
         baseline: 0.0,
         baselineType: TextBaseline.alphabetic,
-        child: child = RenderSizedBox(const Size(100.0, 100.0))
-      )
+        child: child = RenderSizedBox(const Size(100.0, 100.0)),
+      ),
     );
-    final BoxParentData childParentData = child.parentData;
+    final BoxParentData childParentData = child.parentData as BoxParentData;
 
     layout(root, phase: EnginePhase.layout);
     expect(childParentData.offset.dx, equals(0.0));

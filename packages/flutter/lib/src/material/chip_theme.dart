@@ -1,6 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
@@ -21,7 +23,7 @@ import 'theme_data.dart';
 /// rebuilt if the theme later changes.
 ///
 /// The [ThemeData] object given by the [Theme.of] call also contains a default
-/// [Theme.chipTheme] that can be customized by copying it (using
+/// [ThemeData.chipTheme] that can be customized by copying it (using
 /// [ChipThemeData.copyWith]).
 ///
 /// See also:
@@ -38,7 +40,7 @@ import 'theme_data.dart';
 ///    theme.
 ///  * [ThemeData], which describes the overall theme information for the
 ///    application.
-class ChipTheme extends InheritedWidget {
+class ChipTheme extends InheritedTheme {
   /// Applies the given theme [data] to [child].
   ///
   /// The [data] and [child] arguments must not be null.
@@ -46,9 +48,9 @@ class ChipTheme extends InheritedWidget {
     Key key,
     @required this.data,
     @required Widget child,
-  })  : assert(child != null),
-        assert(data != null),
-        super(key: key, child: child);
+  }) : assert(child != null),
+       assert(data != null),
+       super(key: key, child: child);
 
   /// Specifies the color, shape, and text style values for descendant chip
   /// widgets.
@@ -60,7 +62,7 @@ class ChipTheme extends InheritedWidget {
   /// Defaults to the ambient [ThemeData.chipTheme] if there is no
   /// [ChipTheme] in the given build context.
   ///
-  /// ## Sample code
+  /// {@tool snippet}
   ///
   /// ```dart
   /// class Spaceship extends StatelessWidget {
@@ -76,14 +78,21 @@ class ChipTheme extends InheritedWidget {
   ///   }
   /// }
   /// ```
+  /// {@end-tool}
   ///
   /// See also:
   ///
   ///  * [ChipThemeData], which describes the actual configuration of a chip
   ///    theme.
   static ChipThemeData of(BuildContext context) {
-    final ChipTheme inheritedTheme = context.inheritFromWidgetOfExactType(ChipTheme);
+    final ChipTheme inheritedTheme = context.dependOnInheritedWidgetOfExactType<ChipTheme>();
     return inheritedTheme?.data ?? Theme.of(context).chipTheme;
+  }
+
+  @override
+  Widget wrap(BuildContext context, Widget child) {
+    final ChipTheme ancestorTheme = context.findAncestorWidgetOfExactType<ChipTheme>();
+    return identical(this, ancestorTheme) ? child : ChipTheme(data: data, child: child);
   }
 
   @override
@@ -111,7 +120,7 @@ class ChipTheme extends InheritedWidget {
 /// you get from [ChipTheme.of], or create an entirely new one with
 /// [ChipThemeData..fromDefaults].
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// ```dart
 /// class CarColor extends StatefulWidget {
@@ -139,6 +148,7 @@ class ChipTheme extends InheritedWidget {
 ///   }
 /// }
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///
@@ -158,9 +168,11 @@ class ChipTheme extends InheritedWidget {
 ///  * [Theme] widget, which performs a similar function to [ChipTheme],
 ///    but for overall themes.
 ///  * [ThemeData], which has a default [ChipThemeData].
-class ChipThemeData extends Diagnosticable {
+@immutable
+class ChipThemeData with Diagnosticable {
   /// Create a [ChipThemeData] given a set of exact values. All the values
-  /// must be specified.
+  /// must be specified except for [shadowColor], [selectedShadowColor],
+  /// [elevation], and [pressElevation], which may be null.
   ///
   /// This will rarely be used directly. It is used by [lerp] to
   /// create intermediate themes based on two themes.
@@ -170,22 +182,28 @@ class ChipThemeData extends Diagnosticable {
     @required this.disabledColor,
     @required this.selectedColor,
     @required this.secondarySelectedColor,
+    this.shadowColor,
+    this.selectedShadowColor,
+    this.showCheckmark,
+    this.checkmarkColor,
     @required this.labelPadding,
     @required this.padding,
     @required this.shape,
     @required this.labelStyle,
     @required this.secondaryLabelStyle,
     @required this.brightness,
-  })  : assert(backgroundColor != null),
-        assert(disabledColor != null),
-        assert(selectedColor != null),
-        assert(secondarySelectedColor != null),
-        assert(labelPadding != null),
-        assert(padding != null),
-        assert(shape != null),
-        assert(labelStyle != null),
-        assert(secondaryLabelStyle != null),
-        assert(brightness != null);
+    this.elevation,
+    this.pressElevation,
+  }) : assert(backgroundColor != null),
+       assert(disabledColor != null),
+       assert(selectedColor != null),
+       assert(secondarySelectedColor != null),
+       assert(labelPadding != null),
+       assert(padding != null),
+       assert(shape != null),
+       assert(labelStyle != null),
+       assert(secondaryLabelStyle != null),
+       assert(brightness != null);
 
   /// Generates a ChipThemeData from a brightness, a primary color, and a text
   /// style.
@@ -292,6 +310,38 @@ class ChipThemeData extends Diagnosticable {
   /// The chip is selected when [selected] is true.
   final Color secondarySelectedColor;
 
+  /// Color of the chip's shadow when the elevation is greater than 0.
+  ///
+  /// If null, the chip defaults to [Colors.black].
+  ///
+  /// See also:
+  ///
+  ///  * [selectedShadowColor]
+  final Color shadowColor;
+
+  /// Color of the chip's shadow when the elevation is greater than 0 and the
+  /// chip is selected.
+  ///
+  /// If null, the chip defaults to [Colors.black].
+  ///
+  /// See also:
+  ///
+  ///  * [shadowColor]
+  final Color selectedShadowColor;
+
+  /// Whether or not to show a check mark when [selected] is true.
+  ///
+  /// For instance, the [ChoiceChip] sets this to false so that it can be
+  /// selected without showing the check mark.
+  ///
+  /// Defaults to true.
+  final bool showCheckmark;
+
+  /// Color of the chip's check mark when a check mark is visible.
+  ///
+  /// This will override the color set by the platform's brightness setting.
+  final Color checkmarkColor;
+
   /// The padding around the [label] widget.
   ///
   /// By default, this is 4 logical pixels at the beginning and the end of the
@@ -326,6 +376,16 @@ class ChipThemeData extends Diagnosticable {
   /// This affects various base material color choices in the chip rendering.
   final Brightness brightness;
 
+  /// The elevation to be applied to the chip.
+  ///
+  /// If null, the chip defaults to 0.
+  final double elevation;
+
+  /// The elevation to be applied to the chip during the press motion.
+  ///
+  /// If null, the chip defaults to 8.
+  final double pressElevation;
+
   /// Creates a copy of this object but with the given fields replaced with the
   /// new values.
   ChipThemeData copyWith({
@@ -334,12 +394,17 @@ class ChipThemeData extends Diagnosticable {
     Color disabledColor,
     Color selectedColor,
     Color secondarySelectedColor,
+    Color shadowColor,
+    Color selectedShadowColor,
+    Color checkmarkColor,
     EdgeInsetsGeometry labelPadding,
     EdgeInsetsGeometry padding,
     ShapeBorder shape,
     TextStyle labelStyle,
     TextStyle secondaryLabelStyle,
     Brightness brightness,
+    double elevation,
+    double pressElevation,
   }) {
     return ChipThemeData(
       backgroundColor: backgroundColor ?? this.backgroundColor,
@@ -347,12 +412,17 @@ class ChipThemeData extends Diagnosticable {
       disabledColor: disabledColor ?? this.disabledColor,
       selectedColor: selectedColor ?? this.selectedColor,
       secondarySelectedColor: secondarySelectedColor ?? this.secondarySelectedColor,
+      shadowColor: shadowColor ?? this.shadowColor,
+      selectedShadowColor: selectedShadowColor ?? this.selectedShadowColor,
+      checkmarkColor: checkmarkColor ?? this.checkmarkColor,
       labelPadding: labelPadding ?? this.labelPadding,
       padding: padding ?? this.padding,
       shape: shape ?? this.shape,
       labelStyle: labelStyle ?? this.labelStyle,
       secondaryLabelStyle: secondaryLabelStyle ?? this.secondaryLabelStyle,
       brightness: brightness ?? this.brightness,
+      elevation: elevation ?? this.elevation,
+      pressElevation: pressElevation ?? this.pressElevation,
     );
   }
 
@@ -371,12 +441,17 @@ class ChipThemeData extends Diagnosticable {
       disabledColor: Color.lerp(a?.disabledColor, b?.disabledColor, t),
       selectedColor: Color.lerp(a?.selectedColor, b?.selectedColor, t),
       secondarySelectedColor: Color.lerp(a?.secondarySelectedColor, b?.secondarySelectedColor, t),
+      shadowColor: Color.lerp(a?.shadowColor, b?.shadowColor, t),
+      selectedShadowColor: Color.lerp(a?.selectedShadowColor, b?.selectedShadowColor, t),
+      checkmarkColor: Color.lerp(a?.checkmarkColor, b?.checkmarkColor, t),
       labelPadding: EdgeInsetsGeometry.lerp(a?.labelPadding, b?.labelPadding, t),
       padding: EdgeInsetsGeometry.lerp(a?.padding, b?.padding, t),
       shape: ShapeBorder.lerp(a?.shape, b?.shape, t),
       labelStyle: TextStyle.lerp(a?.labelStyle, b?.labelStyle, t),
       secondaryLabelStyle: TextStyle.lerp(a?.secondaryLabelStyle, b?.secondaryLabelStyle, t),
       brightness: t < 0.5 ? a?.brightness ?? Brightness.light : b?.brightness ?? Brightness.light,
+      elevation: lerpDouble(a?.elevation, b?.elevation, t),
+      pressElevation: lerpDouble(a?.pressElevation, b?.pressElevation, t),
     );
   }
 
@@ -388,12 +463,17 @@ class ChipThemeData extends Diagnosticable {
       disabledColor,
       selectedColor,
       secondarySelectedColor,
+      shadowColor,
+      selectedShadowColor,
+      checkmarkColor,
       labelPadding,
       padding,
       shape,
       labelStyle,
       secondaryLabelStyle,
       brightness,
+      elevation,
+      pressElevation,
     );
   }
 
@@ -405,18 +485,23 @@ class ChipThemeData extends Diagnosticable {
     if (other.runtimeType != runtimeType) {
       return false;
     }
-    final ChipThemeData otherData = other;
-    return otherData.backgroundColor == backgroundColor
-        && otherData.deleteIconColor == deleteIconColor
-        && otherData.disabledColor == disabledColor
-        && otherData.selectedColor == selectedColor
-        && otherData.secondarySelectedColor == secondarySelectedColor
-        && otherData.labelPadding == labelPadding
-        && otherData.padding == padding
-        && otherData.shape == shape
-        && otherData.labelStyle == labelStyle
-        && otherData.secondaryLabelStyle == secondaryLabelStyle
-        && otherData.brightness == brightness;
+    return other is ChipThemeData
+        && other.backgroundColor == backgroundColor
+        && other.deleteIconColor == deleteIconColor
+        && other.disabledColor == disabledColor
+        && other.selectedColor == selectedColor
+        && other.secondarySelectedColor == secondarySelectedColor
+        && other.shadowColor == shadowColor
+        && other.selectedShadowColor == selectedShadowColor
+        && other.checkmarkColor == checkmarkColor
+        && other.labelPadding == labelPadding
+        && other.padding == padding
+        && other.shape == shape
+        && other.labelStyle == labelStyle
+        && other.secondaryLabelStyle == secondaryLabelStyle
+        && other.brightness == brightness
+        && other.elevation == elevation
+        && other.pressElevation == pressElevation;
   }
 
   @override
@@ -426,18 +511,23 @@ class ChipThemeData extends Diagnosticable {
     final ChipThemeData defaultData = ChipThemeData.fromDefaults(
       secondaryColor: defaultTheme.primaryColor,
       brightness: defaultTheme.brightness,
-      labelStyle: defaultTheme.textTheme.body2,
+      labelStyle: defaultTheme.textTheme.bodyText1,
     );
-    properties.add(DiagnosticsProperty<Color>('backgroundColor', backgroundColor, defaultValue: defaultData.backgroundColor));
-    properties.add(DiagnosticsProperty<Color>('deleteIconColor', deleteIconColor, defaultValue: defaultData.deleteIconColor));
-    properties.add(DiagnosticsProperty<Color>('disabledColor', disabledColor, defaultValue: defaultData.disabledColor));
-    properties.add(DiagnosticsProperty<Color>('selectedColor', selectedColor, defaultValue: defaultData.selectedColor));
-    properties.add(DiagnosticsProperty<Color>('secondarySelectedColor', secondarySelectedColor, defaultValue: defaultData.secondarySelectedColor));
+    properties.add(ColorProperty('backgroundColor', backgroundColor, defaultValue: defaultData.backgroundColor));
+    properties.add(ColorProperty('deleteIconColor', deleteIconColor, defaultValue: defaultData.deleteIconColor));
+    properties.add(ColorProperty('disabledColor', disabledColor, defaultValue: defaultData.disabledColor));
+    properties.add(ColorProperty('selectedColor', selectedColor, defaultValue: defaultData.selectedColor));
+    properties.add(ColorProperty('secondarySelectedColor', secondarySelectedColor, defaultValue: defaultData.secondarySelectedColor));
+    properties.add(ColorProperty('shadowColor', shadowColor, defaultValue: defaultData.shadowColor));
+    properties.add(ColorProperty('selectedShadowColor', selectedShadowColor, defaultValue: defaultData.selectedShadowColor));
+    properties.add(ColorProperty('checkMarkColor', checkmarkColor, defaultValue: defaultData.checkmarkColor));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('labelPadding', labelPadding, defaultValue: defaultData.labelPadding));
     properties.add(DiagnosticsProperty<EdgeInsetsGeometry>('padding', padding, defaultValue: defaultData.padding));
     properties.add(DiagnosticsProperty<ShapeBorder>('shape', shape, defaultValue: defaultData.shape));
     properties.add(DiagnosticsProperty<TextStyle>('labelStyle', labelStyle, defaultValue: defaultData.labelStyle));
     properties.add(DiagnosticsProperty<TextStyle>('secondaryLabelStyle', secondaryLabelStyle, defaultValue: defaultData.secondaryLabelStyle));
     properties.add(EnumProperty<Brightness>('brightness', brightness, defaultValue: defaultData.brightness));
+    properties.add(DoubleProperty('elevation', elevation, defaultValue: defaultData.elevation));
+    properties.add(DoubleProperty('pressElevation', pressElevation, defaultValue: defaultData.pressElevation));
   }
 }

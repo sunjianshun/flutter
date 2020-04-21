@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,14 @@ import 'framework.dart';
 const double _kOffset = 40.0; // distance to bottom of banner, at a 45 degree angle inwards
 const double _kHeight = 12.0; // height of banner
 const double _kBottomOffset = _kOffset + 0.707 * _kHeight; // offset plus sqrt(2)/2 * banner height
-final Rect _kRect = Rect.fromLTWH(-_kOffset, _kOffset - _kHeight, _kOffset * 2.0, _kHeight);
+const Rect _kRect = Rect.fromLTWH(-_kOffset, _kOffset - _kHeight, _kOffset * 2.0, _kHeight);
 
 const Color _kColor = Color(0xA0B71C1C);
 const TextStyle _kTextStyle = TextStyle(
   color: Color(0xFFFFFFFF),
   fontSize: _kHeight * 0.85,
   fontWeight: FontWeight.w900,
-  height: 1.0
+  height: 1.0,
 );
 
 /// Where to show a [Banner].
@@ -69,7 +69,8 @@ class BannerPainter extends CustomPainter {
        assert(textDirection != null),
        assert(location != null),
        assert(color != null),
-       assert(textStyle != null);
+       assert(textStyle != null),
+       super(repaint: PaintingBinding.instance.systemFonts);
 
   /// The message to show in the banner.
   final String message;
@@ -83,8 +84,10 @@ class BannerPainter extends CustomPainter {
   /// context, the English phrase will be on the right and the Hebrew phrase on
   /// its left.
   ///
-  /// See also [layoutDirection], which controls the interpretation of values in
-  /// [location].
+  /// See also:
+  ///
+  ///  * [layoutDirection], which controls the interpretation of values in
+  ///    [location].
   final TextDirection textDirection;
 
   /// Where to show the banner (e.g., the upper right corner).
@@ -94,8 +97,9 @@ class BannerPainter extends CustomPainter {
   ///
   /// This value is used to interpret the [location] of the banner.
   ///
-  /// See also [textDirection], which controls the reading direction of the
-  /// [message].
+  /// See also:
+  ///
+  ///  * [textDirection], which controls the reading direction of the [message].
   final TextDirection layoutDirection;
 
   /// The color to paint behind the [message].
@@ -276,8 +280,9 @@ class Banner extends StatelessWidget {
   ///
   /// Defaults to the ambient [Directionality], if any.
   ///
-  /// See also [layoutDirection], which controls the interpretation of the
-  /// [location].
+  /// See also:
+  ///
+  ///  * [layoutDirection], which controls the interpretation of the [location].
   final TextDirection textDirection;
 
   /// Where to show the banner (e.g., the upper right corner).
@@ -289,8 +294,9 @@ class Banner extends StatelessWidget {
   ///
   /// Defaults to the ambient [Directionality], if any.
   ///
-  /// See also [textDirection], which controls the reading direction of the
-  /// [message].
+  /// See also:
+  ///
+  ///  * [textDirection], which controls the reading direction of the [message].
   final TextDirection layoutDirection;
 
   /// The color of the banner.
@@ -322,7 +328,7 @@ class Banner extends StatelessWidget {
     properties.add(EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
     properties.add(EnumProperty<BannerLocation>('location', location));
     properties.add(EnumProperty<TextDirection>('layoutDirection', layoutDirection, defaultValue: null));
-    properties.add(DiagnosticsProperty<Color>('color', color, showName: false));
+    properties.add(ColorProperty('color', color, showName: false));
     textStyle?.debugFillProperties(properties, prefix: 'text ');
   }
 }
@@ -331,10 +337,10 @@ class Banner extends StatelessWidget {
 /// [MaterialApp] builds one of these by default.
 /// Does nothing in release mode.
 class CheckedModeBanner extends StatelessWidget {
-  /// Creates a checked mode banner.
+  /// Creates a const checked mode banner.
   const CheckedModeBanner({
     Key key,
-    @required this.child
+    @required this.child,
   }) : super(key: key);
 
   /// The widget to show behind the banner.

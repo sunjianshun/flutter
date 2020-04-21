@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,7 @@ class ExpansionTile extends StatefulWidget {
     Key key,
     this.leading,
     @required this.title,
+    this.subtitle,
     this.backgroundColor,
     this.onExpansionChanged,
     this.children = const <Widget>[],
@@ -52,6 +53,11 @@ class ExpansionTile extends StatefulWidget {
   ///
   /// Typically a [Text] widget.
   final Widget title;
+
+  /// Additional content displayed below the title.
+  ///
+  /// Typically a [Text] widget.
+  final Widget subtitle;
 
   /// Called when the tile expands or collapses.
   ///
@@ -109,7 +115,7 @@ class _ExpansionTileState extends State<ExpansionTile> with SingleTickerProvider
     _iconColor = _controller.drive(_iconColorTween.chain(_easeInTween));
     _backgroundColor = _controller.drive(_backgroundColorTween.chain(_easeOutTween));
 
-    _isExpanded = PageStorage.of(context)?.readState(context) ?? widget.initiallyExpanded;
+    _isExpanded = PageStorage.of(context)?.readState(context) as bool ?? widget.initiallyExpanded;
     if (_isExpanded)
       _controller.value = 1.0;
   }
@@ -142,7 +148,6 @@ class _ExpansionTileState extends State<ExpansionTile> with SingleTickerProvider
 
   Widget _buildChildren(BuildContext context, Widget child) {
     final Color borderSideColor = _borderColor.value ?? Colors.transparent;
-    final Color titleColor = _headerColor.value;
 
     return Container(
       decoration: BoxDecoration(
@@ -150,20 +155,19 @@ class _ExpansionTileState extends State<ExpansionTile> with SingleTickerProvider
         border: Border(
           top: BorderSide(color: borderSideColor),
           bottom: BorderSide(color: borderSideColor),
-        )
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          IconTheme.merge(
-            data: IconThemeData(color: _iconColor.value),
+          ListTileTheme.merge(
+            iconColor: _iconColor.value,
+            textColor: _headerColor.value,
             child: ListTile(
               onTap: _handleTap,
               leading: widget.leading,
-              title: DefaultTextStyle(
-                style: Theme.of(context).textTheme.subhead.copyWith(color: titleColor),
-                child: widget.title,
-              ),
+              title: widget.title,
+              subtitle: widget.subtitle,
               trailing: widget.trailing ?? RotationTransition(
                 turns: _iconTurns,
                 child: const Icon(Icons.expand_more),
@@ -184,16 +188,14 @@ class _ExpansionTileState extends State<ExpansionTile> with SingleTickerProvider
   @override
   void didChangeDependencies() {
     final ThemeData theme = Theme.of(context);
-    _borderColorTween
-      ..end = theme.dividerColor;
+    _borderColorTween.end = theme.dividerColor;
     _headerColorTween
-      ..begin = theme.textTheme.subhead.color
+      ..begin = theme.textTheme.subtitle1.color
       ..end = theme.accentColor;
     _iconColorTween
       ..begin = theme.unselectedWidgetColor
       ..end = theme.accentColor;
-    _backgroundColorTween
-      ..end = widget.backgroundColor;
+    _backgroundColorTween.end = widget.backgroundColor;
     super.didChangeDependencies();
   }
 

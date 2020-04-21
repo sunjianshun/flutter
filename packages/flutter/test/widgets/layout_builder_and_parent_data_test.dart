@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,8 +34,8 @@ class SizeChangerState extends State<SizeChanger> {
         SizedBox(
           height: _flag ? 50.0 : 100.0,
           width: 100.0,
-          child: widget.child
-        )
+          child: widget.child,
+        ),
       ],
     );
   }
@@ -64,7 +64,7 @@ void main() {
           flex: frame, // this is different after the next pump, so that the parentData has to be applied again
           child: Container(height: 100.0),
         )]);
-      })
+      }),
     ));
     frame += 1;
     tester.state<SizeChangerState>(find.byType(SizeChanger)).trigger();

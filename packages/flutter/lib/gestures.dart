@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ export 'src/gestures/drag.dart';
 export 'src/gestures/drag_details.dart';
 export 'src/gestures/eager.dart';
 export 'src/gestures/events.dart';
+export 'src/gestures/force_press.dart';
 export 'src/gestures/hit_test.dart';
 export 'src/gestures/long_press.dart';
 export 'src/gestures/lsq_solver.dart';
@@ -23,6 +24,7 @@ export 'src/gestures/monodrag.dart';
 export 'src/gestures/multidrag.dart';
 export 'src/gestures/multitap.dart';
 export 'src/gestures/pointer_router.dart';
+export 'src/gestures/pointer_signal_resolver.dart';
 export 'src/gestures/recognizer.dart';
 export 'src/gestures/scale.dart';
 export 'src/gestures/tap.dart';

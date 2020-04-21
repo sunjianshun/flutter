@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -244,7 +244,12 @@ class CommonFinders {
   ///
   /// If the [skipOffstage] argument is true (the default), then nodes that are
   /// [Offstage] or that are from inactive [Route]s are skipped.
-  Finder descendant({ Finder of, Finder matching, bool matchRoot = false, bool skipOffstage = true }) {
+  Finder descendant({
+    @required Finder of,
+    @required Finder matching,
+    bool matchRoot = false,
+    bool skipOffstage = true,
+  }) {
     return _DescendantFinder(of, matching, matchRoot: matchRoot, skipOffstage: skipOffstage);
   }
 
@@ -269,8 +274,57 @@ class CommonFinders {
   ///
   /// If the [matchRoot] argument is true then the widget(s) specified by [of]
   /// will be matched along with the ancestors.
-  Finder ancestor({ Finder of, Finder matching, bool matchRoot = false}) {
+  Finder ancestor({
+    @required Finder of,
+    @required Finder matching,
+    bool matchRoot = false,
+  }) {
     return _AncestorFinder(of, matching, matchRoot: matchRoot);
+  }
+
+  /// Finds [Semantics] widgets matching the given `label`, either by
+  /// [RegExp.hasMatch] or string equality.
+  ///
+  /// The framework may combine semantics labels in certain scenarios, such as
+  /// when multiple [Text] widgets are in a [MaterialButton] widget. In such a
+  /// case, it may be preferable to match by regular expression. Consumers of
+  /// this API __must not__ introduce unsuitable content into the semantics tree
+  /// for the purposes of testing; in particular, you should prefer matching by
+  /// regular expression rather than by string if the framework has combined
+  /// your semantics, and not try to force the framework to break up the
+  /// semantics nodes. Breaking up the nodes would have an undesirable effect on
+  /// screen readers and other accessibility services.
+  ///
+  /// ## Sample code
+  ///
+  /// ```dart
+  /// expect(find.BySemanticsLabel('Back'), findsOneWidget);
+  /// ```
+  ///
+  /// If the `skipOffstage` argument is true (the default), then this skips
+  /// nodes that are [Offstage] or that are from inactive [Route]s.
+  Finder bySemanticsLabel(Pattern label, { bool skipOffstage = true }) {
+    if (WidgetsBinding.instance.pipelineOwner.semanticsOwner == null)
+      throw StateError('Semantics are not enabled. '
+                       'Make sure to call tester.enableSemantics() before using '
+                       'this finder, and call dispose on its return value after.');
+    return byElementPredicate(
+      (Element element) {
+        // Multiple elements can have the same renderObject - we want the "owner"
+        // of the renderObject, i.e. the RenderObjectElement.
+        if (element is! RenderObjectElement) {
+          return false;
+        }
+        final String semanticsLabel = element.renderObject?.debugSemantics?.label;
+        if (semanticsLabel == null) {
+          return false;
+        }
+        return label is RegExp
+            ? label.hasMatch(semanticsLabel)
+            : label == semanticsLabel;
+      },
+      skipOffstage: skipOffstage,
+    );
   }
 }
 
@@ -308,7 +362,7 @@ abstract class Finder {
   Iterable<Element> get allCandidates {
     return collectAllElementsFrom(
       WidgetsBinding.instance.renderViewElement,
-      skipOffstage: skipOffstage
+      skipOffstage: skipOffstage,
     );
   }
 
@@ -447,7 +501,7 @@ class _HitTestableFinder extends ChainedFinder {
   @override
   Iterable<Element> filter(Iterable<Element> parentCandidates) sync* {
     for (final Element candidate in parentCandidates) {
-      final RenderBox box = candidate.renderObject;
+      final RenderBox box = candidate.renderObject as RenderBox;
       assert(box != null);
       final Offset absoluteOffset = box.localToGlobal(alignment.alongSize(box.size));
       final HitTestResult hitResult = HitTestResult();
@@ -490,14 +544,13 @@ class _TextFinder extends MatchFinder {
 
   @override
   bool matches(Element candidate) {
-    if (candidate.widget is Text) {
-      final Text textWidget = candidate.widget;
-      if (textWidget.data != null)
-        return textWidget.data == text;
-      return textWidget.textSpan.toPlainText() == text;
-    } else if (candidate.widget is EditableText) {
-      final EditableText editable = candidate.widget;
-      return editable.controller.text == text;
+    final Widget widget = candidate.widget;
+    if (widget is Text) {
+      if (widget.data != null)
+        return widget.data == text;
+      return widget.textSpan.toPlainText() == text;
+    } else if (widget is EditableText) {
+      return widget.controller.text == text;
     }
     return false;
   }
@@ -576,8 +629,8 @@ class _WidgetFinder extends MatchFinder {
 
 class _WidgetPredicateFinder extends MatchFinder {
   _WidgetPredicateFinder(this.predicate, { String description, bool skipOffstage = true })
-      : _description = description,
-        super(skipOffstage: skipOffstage);
+    : _description = description,
+      super(skipOffstage: skipOffstage);
 
   final WidgetPredicate predicate;
   final String _description;
@@ -593,8 +646,8 @@ class _WidgetPredicateFinder extends MatchFinder {
 
 class _ElementPredicateFinder extends MatchFinder {
   _ElementPredicateFinder(this.predicate, { String description, bool skipOffstage = true })
-      : _description = description,
-        super(skipOffstage: skipOffstage);
+    : _description = description,
+      super(skipOffstage: skipOffstage);
 
   final ElementPredicate predicate;
   final String _description;
@@ -609,7 +662,9 @@ class _ElementPredicateFinder extends MatchFinder {
 }
 
 class _DescendantFinder extends Finder {
-  _DescendantFinder(this.ancestor, this.descendant, {
+  _DescendantFinder(
+    this.ancestor,
+    this.descendant, {
     this.matchRoot = false,
     bool skipOffstage = true,
   }) : super(skipOffstage: skipOffstage);
@@ -664,7 +719,7 @@ class _AncestorFinder extends Finder {
   @override
   Iterable<Element> get allCandidates {
     final List<Element> candidates = <Element>[];
-    for (Element root in descendant.evaluate()) {
+    for (final Element root in descendant.evaluate()) {
       final List<Element> ancestors = <Element>[];
       if (matchRoot)
         ancestors.add(root);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class TestSliverChildListDelegate extends SliverChildListDelegate {
 }
 
 class Alive extends StatefulWidget {
-  const Alive(this.alive, this.index);
+  const Alive(this.alive, this.index, { Key key }) : super(key: key);
   final bool alive;
   final int index;
 
@@ -27,7 +27,7 @@ class Alive extends StatefulWidget {
   AliveState createState() => AliveState();
 
   @override
-  String toString({DiagnosticLevel minLevel}) => '$index $alive';
+  String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) => '$index $alive';
 }
 
 class AliveState extends State<Alive> with AutomaticKeepAliveClientMixin {
@@ -35,8 +35,10 @@ class AliveState extends State<Alive> with AutomaticKeepAliveClientMixin {
   bool get wantKeepAlive => widget.alive;
 
   @override
-  Widget build(BuildContext context) =>
-     Text('${widget.index}:$wantKeepAlive');
+  Widget build(BuildContext context) {
+    super.build(context);
+    return Text('${widget.index}:$wantKeepAlive');
+  }
 }
 
 typedef WhetherToKeepAlive = bool Function(int);
@@ -176,7 +178,7 @@ void main() {
   });
 
   testWidgets('ListView large scroll jump and keepAlive first child not keepAlive', (WidgetTester tester) async {
-    Future<void> checkAndScroll([String zero = '0:false']) async {
+    Future<void> checkAndScroll([ String zero = '0:false' ]) async {
       expect(find.text(zero), findsOneWidget);
       expect(find.text('1:false'), findsOneWidget);
       expect(find.text('2:false'), findsOneWidget);
@@ -324,7 +326,7 @@ void main() {
             child: Text('$i', textDirection: TextDirection.ltr),
           );
         },
-      )
+      ),
     );
 
     await tester.pumpWidget(
@@ -499,5 +501,38 @@ void main() {
     );
 
     expect(find.byType(Viewport), isNot(paints..clipRect()));
+  });
+
+  testWidgets('ListView.horizontal has implicit scrolling by default', (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Center(
+          child: Container(
+            height: 200.0,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              itemExtent: 100.0,
+              children: <Widget>[
+                Container(
+                  height: 100.0,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getSemantics(find.byType(Scrollable)), matchesSemantics(
+      children: <Matcher>[
+        matchesSemantics(
+          children: <Matcher>[
+            matchesSemantics(hasImplicitScrolling: true),
+          ],
+        ),
+      ],
+    ));
+    handle.dispose();
   });
 }

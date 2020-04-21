@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,12 @@ class FooMaterialLocalizations extends MaterialLocalizationEn {
   ) : super(
     localeName: localeName.toString(),
     fullYearFormat: intl.DateFormat.y(),
+    compactDateFormat: intl.DateFormat.yMd(),
+    shortDateFormat: intl.DateFormat.yMMMd(),
     mediumDateFormat: intl.DateFormat('E, MMM\u00a0d'),
     longDateFormat: intl.DateFormat.yMMMMEEEEd(),
     yearMonthFormat: intl.DateFormat.yMMMM(),
+    shortMonthDayFormat: intl.DateFormat.MMMd(),
     decimalFormat: intl.NumberFormat.decimalPattern(),
     twoDigitZeroPaddedFormat: intl.NumberFormat('00'),
   );
@@ -29,7 +32,7 @@ class FooMaterialLocalizations extends MaterialLocalizationEn {
 class FooMaterialLocalizationsDelegate extends LocalizationsDelegate<MaterialLocalizations> {
   const FooMaterialLocalizationsDelegate({
     this.supportedLanguage = 'en',
-    this.backButtonTooltip = 'foo'
+    this.backButtonTooltip = 'foo',
   });
 
   final String supportedLanguage;
@@ -37,7 +40,7 @@ class FooMaterialLocalizationsDelegate extends LocalizationsDelegate<MaterialLoc
 
   @override
   bool isSupported(Locale locale) {
-    return supportedLanguage == 'allLanguages' ? true : locale.languageCode == supportedLanguage;
+    return supportedLanguage == 'allLanguages' || locale.languageCode == supportedLanguage;
   }
 
   @override
@@ -103,7 +106,7 @@ void main() {
     expect(tester.widget<Text>(find.byKey(textKey)).data, 'Atrás');
   });
 
-  testWidgets('Localizations.override widget tracks parent\'s locale', (WidgetTester tester) async {
+  testWidgets("Localizations.override widget tracks parent's locale", (WidgetTester tester) async {
     Widget buildLocaleFrame(Locale locale) {
       return buildFrame(
         locale: locale,
@@ -121,7 +124,7 @@ void main() {
               },
             ),
           );
-        }
+        },
       );
     }
 
@@ -153,7 +156,7 @@ void main() {
               },
             ),
           );
-        }
+        },
       );
     }
 
@@ -186,7 +189,7 @@ void main() {
             MaterialLocalizations.of(context).backButtonTooltip,
             key: textKey,
           );
-        }
+        },
       )
     );
 
@@ -217,7 +220,7 @@ void main() {
             MaterialLocalizations.of(context).backButtonTooltip,
             key: textKey,
           );
-        }
+        },
       )
     );
 
@@ -246,7 +249,7 @@ void main() {
             MaterialLocalizations.of(context).backButtonTooltip,
             key: textKey,
           );
-        }
+        },
       )
     );
 

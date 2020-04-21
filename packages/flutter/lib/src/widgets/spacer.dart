@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ import 'framework.dart';
 /// [Spacer] has taken up all of the additional space, therefore there is none
 /// left to redistribute.
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// ```dart
 /// Row(
@@ -31,6 +31,9 @@ import 'framework.dart';
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
+///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=7FJgd7QN1zI}
 ///
 /// See also:
 ///
@@ -42,9 +45,9 @@ class Spacer extends StatelessWidget {
   ///
   /// The [flex] parameter may not be null or less than one.
   const Spacer({Key key, this.flex = 1})
-      : assert(flex != null),
-        assert(flex > 0),
-        super(key: key);
+    : assert(flex != null),
+      assert(flex > 0),
+      super(key: key);
 
   /// The flex factor to use in determining how much space to take up.
   ///

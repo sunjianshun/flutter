@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ class AdaptedListItem extends StatelessWidget {
           margin: const EdgeInsets.all(8.0),
           color: Colors.lightBlueAccent.shade100,
         ),
-        Text(name)
-      ]
+        Text(name),
+      ],
     );
   }
 }
@@ -38,24 +38,24 @@ class AdaptedGridItem extends StatelessWidget {
           Expanded(
             child: Container(
               color: Colors.lightBlueAccent.shade100,
-            )
+            ),
           ),
           Container(
             margin: const EdgeInsets.only(left: 8.0),
             child: Row(
               children: <Widget>[
                 Expanded(
-                  child: Text(name)
+                  child: Text(name),
                 ),
                 const IconButton(
                   icon: Icon(Icons.more_vert),
-                  onPressed: null
-                )
-              ]
-            )
-          )
-        ]
-      )
+                  onPressed: null,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -85,12 +85,7 @@ class AdaptiveContainer extends StatelessWidget {
   }
 }
 
-List<String> _initNames() {
-  final List<String> names = <String>[];
-  for (int i = 0; i < 30; i++)
-    names.add('Item $i');
-  return names;
-}
+List<String> _initNames() => List<String>.generate(30, (int i) => 'Item $i');
 
 final List<String> _kNames = _initNames();
 
@@ -99,9 +94,9 @@ void main() {
     title: 'Media Query Example',
     home: Scaffold(
       appBar: AppBar(
-        title: const Text('Media Query Example')
+        title: const Text('Media Query Example'),
       ),
-      body: Material(child: AdaptiveContainer(names: _kNames))
-    )
+      body: Material(child: AdaptiveContainer(names: _kNames)),
+    ),
   ));
 }

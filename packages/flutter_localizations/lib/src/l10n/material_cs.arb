@@ -54,5 +54,7 @@
   "collapsedIconTapHint": "Rozbalit",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "Zbývá 1 znak",
-  "remainingTextFieldCharacterCountOther": "Zbývá $remainingCount znaků"
+  "remainingTextFieldCharacterCountOther": "Zbývá $remainingCount znaků",
+  "refreshIndicatorSemanticLabel": "Obnovit",
+  "moreButtonTooltip": "Více"
 }

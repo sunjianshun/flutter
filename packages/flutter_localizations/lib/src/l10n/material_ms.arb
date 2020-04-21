@@ -51,5 +51,7 @@
   "collapsedIconTapHint": "Kembangkan",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "1 aksara lagi",
-  "remainingTextFieldCharacterCountOther": "$remainingCount aksara lagi"
+  "remainingTextFieldCharacterCountOther": "$remainingCount aksara lagi",
+  "refreshIndicatorSemanticLabel": "Muat semula",
+  "moreButtonTooltip": "Lagi"
 }

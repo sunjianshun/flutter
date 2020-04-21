@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class Calculator {
       }
     );
     try {
-      final List<dynamic> result = decoder.convert(_data);
+      final List<dynamic> result = decoder.convert(_data) as List<dynamic>;
       final int n = result.length;
       onResultListener('Decoded $n results');
     } catch (e, stack) {
@@ -183,7 +183,7 @@ class CalculationManager {
         sender.send(<double>[ completed, total ]);
       },
       onResultListener: sender.send,
-      data: message.data
+      data: message.data,
     );
     calculator.run();
   }
@@ -221,7 +221,7 @@ class IsolateExampleState extends State<StatefulWidget> with SingleTickerProvide
     )..repeat();
     _calculationManager = CalculationManager(
       onProgressListener: _handleProgressUpdate,
-      onResultListener: _handleResult
+      onResultListener: _handleResult,
     );
   }
 
@@ -243,24 +243,24 @@ class IsolateExampleState extends State<StatefulWidget> with SingleTickerProvide
               width: 120.0,
               height: 120.0,
               color: const Color(0xFF882222),
-            )
+            ),
           ),
           Opacity(
             opacity: _calculationManager.isRunning ? 1.0 : 0.0,
             child: CircularProgressIndicator(
               value: _progress
-            )
+            ),
           ),
           Text(_status),
           Center(
             child: RaisedButton(
               child: Text(_label),
-              onPressed: _handleButtonPressed
-            )
+              onPressed: _handleButtonPressed,
+            ),
           ),
-          Text(_result)
-        ]
-      )
+          Text(_result),
+        ],
+      ),
     );
   }
 
@@ -281,15 +281,15 @@ class IsolateExampleState extends State<StatefulWidget> with SingleTickerProvide
   }
 
   String _getStatus(CalculationState state) {
-      switch (state) {
-        case CalculationState.loading:
-          return 'Loading...';
-        case CalculationState.calculating:
-          return 'In Progress';
-        case CalculationState.idle:
-        default:
-          return 'Idle';
-      }
+    switch (state) {
+      case CalculationState.loading:
+        return 'Loading...';
+      case CalculationState.calculating:
+        return 'In Progress';
+      case CalculationState.idle:
+      default:
+        return 'Idle';
+    }
   }
 
   void _updateState(String result, double progress) {

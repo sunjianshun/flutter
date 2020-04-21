@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,11 +21,11 @@ void main() {
           maxHeight: 50.0,
           child: Container(
             key: inner
-          )
-        )
-      )
+          ),
+        ),
+      ),
     ));
-    final RenderBox box = inner.currentContext.findRenderObject();
+    final RenderBox box = inner.currentContext.findRenderObject() as RenderBox;
     expect(box.localToGlobal(Offset.zero), equals(const Offset(745.0, 565.0)));
     expect(box.size, equals(const Size(100.0, 50.0)));
   });
@@ -36,7 +36,7 @@ void main() {
       minWidth: 1.0,
       maxWidth: 2.0,
       minHeight: 3.0,
-      maxHeight: 4.0
+      maxHeight: 4.0,
     ).debugFillProperties(builder);
     final List<String> description = builder.properties
         .where((DiagnosticsNode n) => !n.isFiltered(DiagnosticLevel.info))
@@ -62,7 +62,7 @@ void main() {
         ),
       ),
     ));
-    final RenderBox box = inner.currentContext.findRenderObject();
+    final RenderBox box = inner.currentContext.findRenderObject() as RenderBox;
     expect(box.size, equals(const Size(50.0, 50.0)));
     expect(
       box.localToGlobal(box.size.center(Offset.zero)),
@@ -85,7 +85,7 @@ void main() {
         ),
       ),
     ));
-    final RenderBox box = inner.currentContext.findRenderObject();
+    final RenderBox box = inner.currentContext.findRenderObject() as RenderBox;
     expect(box.size, equals(const Size(50.0, 50.0)));
     expect(
       box.localToGlobal(box.size.center(Offset.zero)),

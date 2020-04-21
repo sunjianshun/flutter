@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class TestTree {
                 child: RenderPositionedBox(
                   child: child = RenderConstrainedBox(
                     additionalConstraints: const BoxConstraints.tightFor(height: 20.0, width: 20.0),
-                    child: RenderSemanticsAnnotations(label: 'Hello there foo', textDirection: TextDirection.ltr)
+                    child: RenderSemanticsAnnotations(label: 'Hello there foo', textDirection: TextDirection.ltr),
                   ),
                 ),
               ),
@@ -39,7 +39,7 @@ class TestTree {
       ),
     );
   }
-  RenderObject root;
+  RenderBox root;
   RenderConstrainedBox child;
   bool painted = false;
 }
@@ -75,7 +75,7 @@ class TestCompositingBitsTree {
       ),
     );
   }
-  RenderObject root;
+  RenderBox root;
   MutableCompositor compositor;
   RenderConstrainedBox child;
   bool painted = false;

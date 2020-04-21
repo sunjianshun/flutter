@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@ void main() {
         child: IconTheme(
           data: IconThemeData(
             color: Color(0xFF666666),
-            opacity: 0.5
+            opacity: 0.5,
           ),
-          child: Icon(IconData(0xd0a0, fontFamily: 'Arial'))
+          child: Icon(IconData(0xd0a0, fontFamily: 'Arial')),
         ),
       ),
     );
@@ -87,7 +87,7 @@ void main() {
             ),
           ),
         ),
-      )
+      ),
     );
 
     final RenderBox renderObject = tester.renderObject(find.byType(Icon));
@@ -166,7 +166,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('Changing semantic label from null doesn\'t rebuild tree ', (WidgetTester tester) async {
+  testWidgets("Changing semantic label from null doesn't rebuild tree ", (WidgetTester tester) async {
     await tester.pumpWidget(
       const Directionality(
         textDirection: TextDirection.ltr,

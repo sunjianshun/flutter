@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ const TextStyle _kBold = TextStyle(fontWeight: FontWeight.bold);
 const TextStyle _kUnderline = TextStyle(
   decoration: TextDecoration.underline,
   decorationColor: Color(0xFF000000),
-  decorationStyle: TextDecorationStyle.wavy
+  decorationStyle: TextDecorationStyle.wavy,
 );
 
 Widget toStyledText(String name, String text) {
@@ -44,14 +44,14 @@ Widget toStyledText(String name, String text) {
           children: <TextSpan>[
             TextSpan(
               style: _kUnderline,
-              text: name
+              text: name,
             ),
-            const TextSpan(text: ':')
-          ]
+            const TextSpan(text: ':'),
+          ],
         ),
-        TextSpan(text: text)
-      ]
-    )
+        TextSpan(text: text),
+      ],
+    ),
   );
 }
 
@@ -67,7 +67,7 @@ class SpeakerSeparator extends StatelessWidget {
         border: Border(
           bottom: BorderSide(color: Color.fromARGB(24, 0, 0, 0))
         )
-      )
+      ),
     );
   }
 }
@@ -94,27 +94,22 @@ class _StyledTextDemoState extends State<StyledTextDemo> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> lines = _kNameLines
-      .map<Widget>((List<String> nameAndText) => _toText(nameAndText[0], nameAndText[1]))
-      .toList();
-
-    final List<Widget> children = <Widget>[];
-    for (Widget line in lines) {
-      children.add(line);
-      if (line != lines.last)
-        children.add(SpeakerSeparator());
-    }
-
     return GestureDetector(
       onTap: _handleTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8.0),
         child: Column(
-          children: children,
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start
-        )
-      )
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: _kNameLines
+            .map<Widget>((List<String> nameAndText) => _toText(nameAndText[0], nameAndText[1]))
+            .expand((Widget line) => <Widget>[
+              line,
+              SpeakerSeparator(),
+            ])
+            .toList()..removeLast(),
+        ),
+      ),
     );
   }
 }
@@ -124,12 +119,12 @@ void main() {
     theme: ThemeData.light(),
     home: Scaffold(
       appBar: AppBar(
-        title: const Text('Hal and Dave')
+        title: const Text('Hal and Dave'),
       ),
       body: Material(
         color: Colors.grey.shade50,
-        child: StyledTextDemo()
-      )
-    )
+        child: StyledTextDemo(),
+      ),
+    ),
   ));
 }

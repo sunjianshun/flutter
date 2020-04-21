@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ import 'dart:ui' show Color, Offset;
 
 import 'package:flutter/painting.dart';
 
-// Based on http://material.google.com/what-is-material/elevation-shadows.html
+// Based on https://material.io/design/environment/elevation.html
 // Currently, only the elevation values that are bound to one or more widgets are
 // defined here.
 
@@ -17,10 +17,14 @@ import 'package:flutter/painting.dart';
 /// Each entry has three shadows which must be combined to obtain the defined
 /// effect for that elevation.
 ///
+/// This is useful when simulating a shadow with a [BoxDecoration] or other
+/// class that uses a list of [BoxShadow] objects.
+///
 /// See also:
 ///
-///  * [Material]
-///  * <https://material.google.com/what-is-material/elevation-shadows.html>
+///  * [Material], which takes an arbitrary double for its elevation and generates
+///    a shadow dynamically.
+///  * <https://material.io/design/environment/elevation.html>
 const Map<int, List<BoxShadow>> kElevationToShadow = _elevationToShadow; // to hide the literal from the docs
 
 const Color _kKeyUmbraOpacity = Color(0x33000000); // alpha = 0.2

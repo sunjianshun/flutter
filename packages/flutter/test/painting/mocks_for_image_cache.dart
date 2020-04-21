@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class TestImageProvider extends ImageProvider<int> {
   }
 
   @override
-  ImageStreamCompleter load(int key) {
+  ImageStreamCompleter load(int key, DecoderCallback decode) {
     return OneFrameImageStreamCompleter(
       SynchronousFuture<ImageInfo>(TestImageInfo(imageValue, image: image))
     );
@@ -47,12 +47,22 @@ class TestImageProvider extends ImageProvider<int> {
   String toString() => '$runtimeType($key, $imageValue)';
 }
 
+class FailingTestImageProvider extends TestImageProvider {
+  const FailingTestImageProvider(int key, int imageValue, { ui.Image image }) : super(key, imageValue, image: image);
+
+  @override
+  ImageStreamCompleter load(int key, DecoderCallback decode) {
+    return OneFrameImageStreamCompleter(Future<ImageInfo>.sync(() => Future<ImageInfo>.error('loading failed!')));
+  }
+}
+
 Future<ImageInfo> extractOneFrame(ImageStream stream) {
   final Completer<ImageInfo> completer = Completer<ImageInfo>();
-  void listener(ImageInfo image, bool synchronousCall) {
+  ImageStreamListener listener;
+  listener = ImageStreamListener((ImageInfo image, bool synchronousCall) {
     completer.complete(image);
     stream.removeListener(listener);
-  }
+  });
   stream.addListener(listener);
   return completer.future;
 }
@@ -65,10 +75,66 @@ class TestImage implements ui.Image {
   final int width;
 
   @override
-  void dispose() {}
+  void dispose() { }
 
   @override
-  Future<ByteData> toByteData({ImageByteFormat format = ImageByteFormat.rawRgba}) {
+  Future<ByteData> toByteData({ ImageByteFormat format = ImageByteFormat.rawRgba }) {
     throw UnimplementedError();
+  }
+}
+
+class ErrorImageProvider extends ImageProvider<ErrorImageProvider> {
+  @override
+  ImageStreamCompleter load(ErrorImageProvider key, DecoderCallback decode) {
+    throw Error();
+  }
+
+  @override
+  Future<ErrorImageProvider> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<ErrorImageProvider>(this);
+  }
+}
+
+class ObtainKeyErrorImageProvider extends ImageProvider<ObtainKeyErrorImageProvider> {
+  @override
+  ImageStreamCompleter load(ObtainKeyErrorImageProvider key, DecoderCallback decode) {
+    throw Error();
+  }
+
+  @override
+  Future<ObtainKeyErrorImageProvider> obtainKey(ImageConfiguration configuration) {
+    throw Error();
+  }
+}
+
+class LoadErrorImageProvider extends ImageProvider<LoadErrorImageProvider> {
+  @override
+  ImageStreamCompleter load(LoadErrorImageProvider key, DecoderCallback decode) {
+    throw Error();
+  }
+
+  @override
+  Future<LoadErrorImageProvider> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<LoadErrorImageProvider>(this);
+  }
+}
+
+class LoadErrorCompleterImageProvider extends ImageProvider<LoadErrorCompleterImageProvider> {
+  @override
+  ImageStreamCompleter load(LoadErrorCompleterImageProvider key, DecoderCallback decode) {
+    final Completer<ImageInfo> completer = Completer<ImageInfo>.sync();
+    completer.completeError(Error());
+    return OneFrameImageStreamCompleter(completer.future);
+  }
+
+  @override
+  Future<LoadErrorCompleterImageProvider> obtainKey(ImageConfiguration configuration) {
+    return SynchronousFuture<LoadErrorCompleterImageProvider>(this);
+  }
+}
+
+class TestImageStreamCompleter extends ImageStreamCompleter {
+  void testSetImage(TestImage image) {
+    setImage(ImageInfo(image: image, scale: 1.0));
   }
 }

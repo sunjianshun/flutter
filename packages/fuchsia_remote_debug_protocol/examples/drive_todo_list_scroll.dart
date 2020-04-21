@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ import 'package:fuchsia_remote_debug_protocol/logging.dart';
 ///
 /// Make sure to set up your application (you can change the name from
 /// 'todo_list') follows the setup for testing with the flutter driver:
-/// https://flutter.io/testing/#adding-the-flutter_driver-dependency
+/// https://flutter.dev/testing/#adding-the-flutter_driver-dependency
 ///
 /// Example usage:
 ///

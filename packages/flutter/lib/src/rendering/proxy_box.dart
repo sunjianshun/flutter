@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:async';
 
-import 'dart:ui' as ui show ImageFilter, Gradient, Image;
+import 'dart:ui' as ui show ImageFilter, Gradient, Image, Color;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
@@ -14,8 +14,10 @@ import 'package:flutter/semantics.dart';
 
 import 'package:vector_math/vector_math_64.dart';
 
+import 'binding.dart';
 import 'box.dart';
 import 'layer.dart';
+import 'mouse_tracking.dart';
 import 'object.dart';
 
 export 'package:flutter/gestures.dart' show
@@ -25,7 +27,7 @@ export 'package:flutter/gestures.dart' show
   PointerUpEvent,
   PointerCancelEvent;
 
-/// A base class for render objects that resemble their children.
+/// A base class for render boxes that resemble their children.
 ///
 /// A proxy box has a single child and simply mimics all the properties of that
 /// child by calling through to the child for each function in the render box
@@ -36,6 +38,11 @@ export 'package:flutter/gestures.dart' show
 /// the proxy box with its child. However, RenderProxyBox is a useful base class
 /// for render objects that wish to mimic most, but not all, of the properties
 /// of their child.
+///
+/// See also:
+///
+///  * [RenderProxySliver], a base class for render slivers that resemble their
+///    children.
 class RenderProxyBox extends RenderBox with RenderObjectWithChildMixin<RenderBox>, RenderProxyBoxMixin<RenderBox> {
   /// Creates a proxy render box.
   ///
@@ -109,7 +116,7 @@ mixin RenderProxyBoxMixin<T extends RenderBox> on RenderBox, RenderObjectWithChi
   }
 
   @override
-  bool hitTestChildren(HitTestResult result, { Offset position }) {
+  bool hitTestChildren(BoxHitTestResult result, { Offset position }) {
     return child?.hitTest(result, position: position) ?? false;
   }
 
@@ -147,14 +154,14 @@ abstract class RenderProxyBoxWithHitTestBehavior extends RenderProxyBox {
   /// By default, the [behavior] is [HitTestBehavior.deferToChild].
   RenderProxyBoxWithHitTestBehavior({
     this.behavior = HitTestBehavior.deferToChild,
-    RenderBox child
+    RenderBox child,
   }) : super(child);
 
   /// How to behave during hit testing.
   HitTestBehavior behavior;
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     bool hitTarget = false;
     if (size.contains(position)) {
       hitTarget = hitTestChildren(result, position: position) || hitTestSelf(position);
@@ -254,6 +261,7 @@ class RenderConstrainedBox extends RenderProxyBox {
 
   @override
   void performLayout() {
+    final BoxConstraints constraints = this.constraints;
     if (child != null) {
       child.layout(_additionalConstraints.enforce(constraints), parentUsesSize: true);
       size = child.size;
@@ -304,7 +312,7 @@ class RenderLimitedBox extends RenderProxyBox {
   RenderLimitedBox({
     RenderBox child,
     double maxWidth = double.infinity,
-    double maxHeight = double.infinity
+    double maxHeight = double.infinity,
   }) : assert(maxWidth != null && maxWidth >= 0.0),
        assert(maxHeight != null && maxHeight >= 0.0),
        _maxWidth = maxWidth,
@@ -338,13 +346,14 @@ class RenderLimitedBox extends RenderProxyBox {
       minWidth: constraints.minWidth,
       maxWidth: constraints.hasBoundedWidth ? constraints.maxWidth : constraints.constrainWidth(maxWidth),
       minHeight: constraints.minHeight,
-      maxHeight: constraints.hasBoundedHeight ? constraints.maxHeight : constraints.constrainHeight(maxHeight)
+      maxHeight: constraints.hasBoundedHeight ? constraints.maxHeight : constraints.constrainHeight(maxHeight),
     );
   }
 
   @override
   void performLayout() {
     if (child != null) {
+      final BoxConstraints constraints = this.constraints;
       child.layout(_limitConstraints(constraints), parentUsesSize: true);
       size = constraints.constrain(child.size);
     } else {
@@ -541,16 +550,26 @@ class RenderAspectRatio extends RenderProxyBox {
 /// depth of the tree.
 class RenderIntrinsicWidth extends RenderProxyBox {
   /// Creates a render object that sizes itself to its child's intrinsic width.
+  ///
+  /// If [stepWidth] is non-null it must be > 0.0. Similarly If [stepHeight] is
+  /// non-null it must be > 0.0.
   RenderIntrinsicWidth({
     double stepWidth,
     double stepHeight,
-    RenderBox child
-  }) : _stepWidth = stepWidth, _stepHeight = stepHeight, super(child);
+    RenderBox child,
+  }) : assert(stepWidth == null || stepWidth > 0.0),
+       assert(stepHeight == null || stepHeight > 0.0),
+       _stepWidth = stepWidth,
+       _stepHeight = stepHeight,
+       super(child);
 
   /// If non-null, force the child's width to be a multiple of this value.
+  ///
+  /// This value must be null or > 0.0.
   double get stepWidth => _stepWidth;
   double _stepWidth;
   set stepWidth(double value) {
+    assert(value == null || value > 0.0);
     if (value == _stepWidth)
       return;
     _stepWidth = value;
@@ -558,9 +577,12 @@ class RenderIntrinsicWidth extends RenderProxyBox {
   }
 
   /// If non-null, force the child's height to be a multiple of this value.
+  ///
+  /// This value must be null or > 0.0.
   double get stepHeight => _stepHeight;
   double _stepHeight;
   set stepHeight(double value) {
+    assert(value == null || value > 0.0);
     if (value == _stepHeight)
       return;
     _stepHeight = value;
@@ -651,7 +673,7 @@ class RenderIntrinsicWidth extends RenderProxyBox {
 class RenderIntrinsicHeight extends RenderProxyBox {
   /// Creates a render object that sizes itself to its child's intrinsic height.
   RenderIntrinsicHeight({
-    RenderBox child
+    RenderBox child,
   }) : super(child);
 
   @override
@@ -697,8 +719,6 @@ class RenderIntrinsicHeight extends RenderProxyBox {
 
 }
 
-int _getAlphaFromOpacity(double opacity) => (opacity * 255).round();
-
 /// Makes its child partially transparent.
 ///
 /// This class paints its child into an intermediate buffer and then blends the
@@ -721,7 +741,7 @@ class RenderOpacity extends RenderProxyBox {
        assert(alwaysIncludeSemantics != null),
        _opacity = opacity,
        _alwaysIncludeSemantics = alwaysIncludeSemantics,
-       _alpha = _getAlphaFromOpacity(opacity),
+       _alpha = ui.Color.getAlphaFromOpacity(opacity),
        super(child);
 
   @override
@@ -749,11 +769,11 @@ class RenderOpacity extends RenderProxyBox {
     final bool didNeedCompositing = alwaysNeedsCompositing;
     final bool wasVisible = _alpha != 0;
     _opacity = value;
-    _alpha = _getAlphaFromOpacity(_opacity);
+    _alpha = ui.Color.getAlphaFromOpacity(_opacity);
     if (didNeedCompositing != alwaysNeedsCompositing)
       markNeedsCompositingBitsUpdate();
     markNeedsPaint();
-    if (wasVisible != (_alpha != 0))
+    if (wasVisible != (_alpha != 0) && !alwaysIncludeSemantics)
       markNeedsSemanticsUpdate();
   }
 
@@ -775,14 +795,18 @@ class RenderOpacity extends RenderProxyBox {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       if (_alpha == 0) {
+        // No need to keep the layer. We'll create a new one if necessary.
+        layer = null;
         return;
       }
       if (_alpha == 255) {
+        // No need to keep the layer. We'll create a new one if necessary.
+        layer = null;
         context.paintChild(child, offset);
         return;
       }
       assert(needsCompositing);
-      context.pushOpacity(offset, _alpha, super.paint);
+      layer = context.pushOpacity(offset, _alpha, super.paint, oldLayer: layer as OpacityLayer);
     }
   }
 
@@ -800,25 +824,12 @@ class RenderOpacity extends RenderProxyBox {
   }
 }
 
-/// Makes its child partially transparent, driven from an [Animation].
+/// Implementation of [RenderAnimatedOpacity] and [RenderSliverAnimatedOpacity].
 ///
-/// This is a variant of [RenderOpacity] that uses an [Animation<double>] rather
-/// than a [double] to control the opacity.
-class RenderAnimatedOpacity extends RenderProxyBox {
-  /// Creates a partially transparent render object.
-  ///
-  /// The [opacity] argument must not be null.
-  RenderAnimatedOpacity({
-    @required Animation<double> opacity,
-    bool alwaysIncludeSemantics = false,
-    RenderBox child,
-  }) : assert(opacity != null),
-       assert(alwaysIncludeSemantics != null),
-       _alwaysIncludeSemantics = alwaysIncludeSemantics,
-       super(child) {
-    this.opacity = opacity;
-  }
-
+/// Use this mixin in situations where the proxying behavior
+/// of [RenderProxyBox] or [RenderProxySliver] is desired for animating opacity,
+/// but would like to use the same methods for both types of render objects.
+mixin RenderAnimatedOpacityMixin<T extends RenderObject> on RenderObjectWithChildMixin<T> {
   int _alpha;
 
   @override
@@ -865,7 +876,7 @@ class RenderAnimatedOpacity extends RenderProxyBox {
     super.attach(owner);
     _opacity.addListener(_updateOpacity);
     _updateOpacity(); // in case it changed while we weren't listening
- }
+  }
 
   @override
   void detach() {
@@ -875,7 +886,7 @@ class RenderAnimatedOpacity extends RenderProxyBox {
 
   void _updateOpacity() {
     final int oldAlpha = _alpha;
-    _alpha = _getAlphaFromOpacity(_opacity.value.clamp(0.0, 1.0));
+    _alpha = ui.Color.getAlphaFromOpacity(_opacity.value);
     if (oldAlpha != _alpha) {
       final bool didNeedCompositing = _currentlyNeedsCompositing;
       _currentlyNeedsCompositing = _alpha > 0 && _alpha < 255;
@@ -890,14 +901,19 @@ class RenderAnimatedOpacity extends RenderProxyBox {
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
-      if (_alpha == 0)
+      if (_alpha == 0) {
+        // No need to keep the layer. We'll create a new one if necessary.
+        layer = null;
         return;
+      }
       if (_alpha == 255) {
+        // No need to keep the layer. We'll create a new one if necessary.
+        layer = null;
         context.paintChild(child, offset);
         return;
       }
       assert(needsCompositing);
-      context.pushOpacity(offset, _alpha, super.paint);
+      layer = context.pushOpacity(offset, _alpha, super.paint, oldLayer: layer as OpacityLayer);
     }
   }
 
@@ -912,6 +928,26 @@ class RenderAnimatedOpacity extends RenderProxyBox {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty<Animation<double>>('opacity', opacity));
     properties.add(FlagProperty('alwaysIncludeSemantics', value: alwaysIncludeSemantics, ifTrue: 'alwaysIncludeSemantics'));
+  }
+}
+
+/// Makes its child partially transparent, driven from an [Animation].
+///
+/// This is a variant of [RenderOpacity] that uses an [Animation<double>] rather
+/// than a [double] to control the opacity.
+class RenderAnimatedOpacity extends RenderProxyBox with RenderProxyBoxMixin, RenderAnimatedOpacityMixin<RenderBox> {
+  /// Creates a partially transparent render object.
+  ///
+  /// The [opacity] argument must not be null.
+  RenderAnimatedOpacity({
+    @required Animation<double> opacity,
+    bool alwaysIncludeSemantics = false,
+    RenderBox child,
+  }) : assert(opacity != null),
+       assert(alwaysIncludeSemantics != null),
+       super(child) {
+    this.opacity = opacity;
+    this.alwaysIncludeSemantics = alwaysIncludeSemantics;
   }
 }
 
@@ -938,10 +974,16 @@ class RenderShaderMask extends RenderProxyBox {
        _blendMode = blendMode,
        super(child);
 
+  @override
+  ShaderMaskLayer get layer => super.layer as ShaderMaskLayer;
+
   /// Called to creates the [Shader] that generates the mask.
   ///
   /// The shader callback is called with the current size of the child so that
   /// it can customize the shader to the size and location of the child.
+  ///
+  /// The rectangle will always be at the origin when called by
+  /// [RenderShaderMask].
   // TODO(abarth): Use the delegate pattern here to avoid generating spurious
   // repaints when the ShaderCallback changes identity.
   ShaderCallback get shaderCallback => _shaderCallback;
@@ -975,15 +1017,14 @@ class RenderShaderMask extends RenderProxyBox {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       assert(needsCompositing);
-      context.pushLayer(
-        ShaderMaskLayer(
-          shader: _shaderCallback(offset & size),
-          maskRect: offset & size,
-          blendMode: _blendMode,
-        ),
-        super.paint,
-        offset,
-      );
+      layer ??= ShaderMaskLayer();
+      layer
+        ..shader = _shaderCallback(Offset.zero & size)
+        ..maskRect = offset & size
+        ..blendMode = _blendMode;
+      context.pushLayer(layer, super.paint, offset);
+    } else {
+      layer = null;
     }
   }
 }
@@ -1000,6 +1041,9 @@ class RenderBackdropFilter extends RenderProxyBox {
     : assert(filter != null),
       _filter = filter,
       super(child);
+
+  @override
+  BackdropFilterLayer get layer => super.layer as BackdropFilterLayer;
 
   /// The image filter to apply to the existing painted content before painting
   /// the child.
@@ -1023,7 +1067,11 @@ class RenderBackdropFilter extends RenderProxyBox {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       assert(needsCompositing);
-      context.pushLayer(BackdropFilterLayer(filter: _filter), super.paint, offset);
+      layer ??= BackdropFilterLayer();
+      layer.filter = _filter;
+      context.pushLayer(layer, super.paint, offset);
+    } else {
+      layer = null;
     }
   }
 }
@@ -1040,7 +1088,7 @@ class RenderBackdropFilter extends RenderProxyBox {
 /// information.
 ///
 /// The most efficient way to update the clip provided by this class is to
-/// supply a reclip argument to the constructor of the [CustomClipper]. The
+/// supply a `reclip` argument to the constructor of the [CustomClipper]. The
 /// custom object will listen to this animation and update the clip whenever the
 /// animation ticks, avoiding both the build and layout phases of the pipeline.
 ///
@@ -1050,6 +1098,7 @@ class RenderBackdropFilter extends RenderProxyBox {
 ///  * [ClipRRect], which can be customized with a [CustomClipper<RRect>].
 ///  * [ClipOval], which can be customized with a [CustomClipper<Rect>].
 ///  * [ClipPath], which can be customized with a [CustomClipper<Path>].
+///  * [ShapeBorderClipper], for specifying a clip path using a [ShapeBorder].
 abstract class CustomClipper<T> {
   /// Creates a custom clipper.
   ///
@@ -1090,7 +1139,7 @@ abstract class CustomClipper<T> {
   bool shouldReclip(covariant CustomClipper<T> oldClipper);
 
   @override
-  String toString() => '$runtimeType';
+  String toString() => objectRuntimeType(this, 'CustomClipper');
 }
 
 /// A [CustomClipper] that clips to the outer path of a [ShapeBorder].
@@ -1127,8 +1176,9 @@ class ShapeBorderClipper extends CustomClipper<Path> {
   bool shouldReclip(CustomClipper<Path> oldClipper) {
     if (oldClipper.runtimeType != ShapeBorderClipper)
       return true;
-    final ShapeBorderClipper typedOldClipper = oldClipper;
-    return typedOldClipper.shape != shape;
+    final ShapeBorderClipper typedOldClipper = oldClipper as ShapeBorderClipper;
+    return typedOldClipper.shape != shape
+        || typedOldClipper.textDirection != textDirection;
   }
 }
 
@@ -1136,8 +1186,11 @@ abstract class _RenderCustomClip<T> extends RenderProxyBox {
   _RenderCustomClip({
     RenderBox child,
     CustomClipper<T> clipper,
-    this.clipBehavior = Clip.antiAlias,
-  }) : _clipper = clipper, assert(clipBehavior != null), super(child);
+    Clip clipBehavior = Clip.antiAlias,
+  }) : assert(clipBehavior != null),
+       _clipper = clipper,
+       _clipBehavior = clipBehavior,
+       super(child);
 
   /// If non-null, determines which clip to use on the child.
   CustomClipper<T> get clipper => _clipper;
@@ -1163,7 +1216,7 @@ abstract class _RenderCustomClip<T> extends RenderProxyBox {
   void attach(PipelineOwner owner) {
     super.attach(owner);
     _clipper?._reclip?.addListener(_markNeedsClip);
- }
+  }
 
   @override
   void detach() {
@@ -1180,7 +1233,14 @@ abstract class _RenderCustomClip<T> extends RenderProxyBox {
   T get _defaultClip;
   T _clip;
 
-  final Clip clipBehavior;
+  Clip get clipBehavior => _clipBehavior;
+  set clipBehavior(Clip value) {
+    if (value != _clipBehavior) {
+      _clipBehavior = value;
+      markNeedsPaint();
+    }
+  }
+  Clip _clipBehavior;
 
   @override
   void performLayout() {
@@ -1241,18 +1301,20 @@ class RenderClipRect extends _RenderCustomClip<Rect> {
   /// If [clipper] is null, the clip will match the layout size and position of
   /// the child.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] must not be null or [Clip.none].
   RenderClipRect({
     RenderBox child,
     CustomClipper<Rect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : super(child: child, clipper: clipper, clipBehavior: clipBehavior);
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
+       super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   @override
   Rect get _defaultClip => Offset.zero & size;
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     if (_clipper != null) {
       _updateClip();
       assert(_clip != null);
@@ -1266,7 +1328,16 @@ class RenderClipRect extends _RenderCustomClip<Rect> {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       _updateClip();
-      context.pushClipRect(needsCompositing, offset, _clip, super.paint, clipBehavior: clipBehavior);
+      layer = context.pushClipRect(
+        needsCompositing,
+        offset,
+        _clip,
+        super.paint,
+        clipBehavior: clipBehavior,
+        oldLayer: layer as ClipRectLayer,
+      );
+    } else {
+      layer = null;
     }
   }
 
@@ -1296,13 +1367,16 @@ class RenderClipRRect extends _RenderCustomClip<RRect> {
   ///
   /// If [clipper] is non-null, then [borderRadius] is ignored.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipRRect({
     RenderBox child,
     BorderRadius borderRadius = BorderRadius.zero,
     CustomClipper<RRect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none), _borderRadius = borderRadius, super(child: child, clipper: clipper, clipBehavior: clipBehavior) {
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
+       _borderRadius = borderRadius,
+       super(child: child, clipper: clipper, clipBehavior: clipBehavior) {
     assert(_borderRadius != null || clipper != null);
   }
 
@@ -1326,7 +1400,7 @@ class RenderClipRRect extends _RenderCustomClip<RRect> {
   RRect get _defaultClip => _borderRadius.toRRect(Offset.zero & size);
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     if (_clipper != null) {
       _updateClip();
       assert(_clip != null);
@@ -1340,7 +1414,15 @@ class RenderClipRRect extends _RenderCustomClip<RRect> {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       _updateClip();
-      context.pushClipRRect(needsCompositing, offset, _clip.outerRect, _clip, super.paint, clipBehavior: clipBehavior);
+      layer = context.pushClipRRect(
+        needsCompositing,
+        offset,
+        _clip.outerRect,
+        _clip,
+        super.paint, clipBehavior: clipBehavior, oldLayer: layer as ClipRRectLayer,
+      );
+    } else {
+      layer = null;
     }
   }
 
@@ -1368,12 +1450,14 @@ class RenderClipOval extends _RenderCustomClip<Rect> {
   /// If [clipper] is null, the oval will be inscribed into the layout size and
   /// position of the child.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipOval({
     RenderBox child,
     CustomClipper<Rect> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none), super(child: child, clipper: clipper, clipBehavior: clipBehavior);
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
+       super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   Rect _cachedRect;
   Path _cachedPath;
@@ -1390,7 +1474,7 @@ class RenderClipOval extends _RenderCustomClip<Rect> {
   Rect get _defaultClip => Offset.zero & size;
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     _updateClip();
     assert(_clip != null);
     final Offset center = _clip.center;
@@ -1407,7 +1491,17 @@ class RenderClipOval extends _RenderCustomClip<Rect> {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       _updateClip();
-      context.pushClipPath(needsCompositing, offset, _clip, _getClipPath(_clip), super.paint, clipBehavior: clipBehavior);
+      layer = context.pushClipPath(
+        needsCompositing,
+        offset,
+        _clip,
+        _getClipPath(_clip),
+        super.paint,
+        clipBehavior: clipBehavior,
+        oldLayer: layer as ClipPathLayer,
+      );
+    } else {
+      layer = null;
     }
   }
 
@@ -1443,18 +1537,20 @@ class RenderClipPath extends _RenderCustomClip<Path> {
   /// consider using a [RenderClipRect], which can achieve the same effect more
   /// efficiently.
   ///
-  /// The [clipBehavior] cannot be [Clip.none].
+  /// The [clipBehavior] argument must not be null or [Clip.none].
   RenderClipPath({
     RenderBox child,
     CustomClipper<Path> clipper,
     Clip clipBehavior = Clip.antiAlias,
-  }) : assert(clipBehavior != Clip.none), super(child: child, clipper: clipper, clipBehavior: clipBehavior);
+  }) : assert(clipBehavior != null),
+       assert(clipBehavior != Clip.none),
+       super(child: child, clipper: clipper, clipBehavior: clipBehavior);
 
   @override
   Path get _defaultClip => Path()..addRect(Offset.zero & size);
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     if (_clipper != null) {
       _updateClip();
       assert(_clip != null);
@@ -1468,7 +1564,17 @@ class RenderClipPath extends _RenderCustomClip<Path> {
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
       _updateClip();
-      context.pushClipPath(needsCompositing, offset, Offset.zero & size, _clip, super.paint, clipBehavior: clipBehavior);
+      layer = context.pushClipPath(
+        needsCompositing,
+        offset,
+        Offset.zero & size,
+        _clip,
+        super.paint,
+        clipBehavior: clipBehavior,
+        oldLayer: layer as ClipPathLayer,
+      );
+    } else {
+      layer = null;
     }
   }
 
@@ -1491,6 +1597,7 @@ class RenderClipPath extends _RenderCustomClip<Path> {
 /// determine the actual shape of the physical model.
 abstract class _RenderPhysicalModelBase<T> extends _RenderCustomClip<T> {
   /// The [shape], [elevation], [color], and [shadowColor] must not be null.
+  /// Additionally, the [elevation] must be non-negative.
   _RenderPhysicalModelBase({
     @required RenderBox child,
     @required double elevation,
@@ -1498,7 +1605,7 @@ abstract class _RenderPhysicalModelBase<T> extends _RenderCustomClip<T> {
     @required Color shadowColor,
     Clip clipBehavior = Clip.none,
     CustomClipper<T> clipper,
-  }) : assert(elevation != null),
+  }) : assert(elevation != null && elevation >= 0.0),
        assert(color != null),
        assert(shadowColor != null),
        assert(clipBehavior != null),
@@ -1507,14 +1614,16 @@ abstract class _RenderPhysicalModelBase<T> extends _RenderCustomClip<T> {
        _shadowColor = shadowColor,
        super(child: child, clipBehavior: clipBehavior, clipper: clipper);
 
-  /// The z-coordinate at which to place this material.
+  /// The z-coordinate relative to the parent at which to place this material.
+  ///
+  /// The value is non-negative.
   ///
   /// If [debugDisableShadows] is set, this value is ignored and no shadow is
   /// drawn (an outline is rendered instead).
   double get elevation => _elevation;
   double _elevation;
   set elevation(double value) {
-    assert(value != null);
+    assert(value != null && value >= 0.0);
     if (elevation == value)
       return;
     final bool didNeedCompositing = alwaysNeedsCompositing;
@@ -1546,19 +1655,21 @@ abstract class _RenderPhysicalModelBase<T> extends _RenderCustomClip<T> {
     markNeedsPaint();
   }
 
-  static final Paint _transparentPaint = Paint()..color = const Color(0x00000000);
-
-  // On Fuchsia, the system compositor is responsible for drawing shadows
-  // for physical model layers with non-zero elevation.
   @override
-  bool get alwaysNeedsCompositing => _elevation != 0.0 && defaultTargetPlatform == TargetPlatform.fuchsia;
+  bool get alwaysNeedsCompositing => true;
+
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.elevation = elevation;
+  }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder description) {
     super.debugFillProperties(description);
     description.add(DoubleProperty('elevation', elevation));
-    description.add(DiagnosticsProperty<Color>('color', color));
-    description.add(DiagnosticsProperty<Color>('shadowColor', color));
+    description.add(ColorProperty('color', color));
+    description.add(ColorProperty('shadowColor', color));
   }
 }
 
@@ -1571,7 +1682,9 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
   ///
   /// The [color] is required.
   ///
-  /// The [shape], [elevation], [color], and [shadowColor] must not be null.
+  /// The [shape], [elevation], [color], [clipBehavior], and [shadowColor]
+  /// arguments must not be null. Additionally, the [elevation] must be
+  /// non-negative.
   RenderPhysicalModel({
     RenderBox child,
     BoxShape shape = BoxShape.rectangle,
@@ -1582,7 +1695,7 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
     Color shadowColor = const Color(0xFF000000),
   }) : assert(shape != null),
        assert(clipBehavior != null),
-       assert(elevation != null),
+       assert(elevation != null && elevation >= 0.0),
        assert(color != null),
        assert(shadowColor != null),
        _shape = shape,
@@ -1592,8 +1705,11 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
          child: child,
          elevation: elevation,
          color: color,
-         shadowColor: shadowColor
+         shadowColor: shadowColor,
        );
+
+  @override
+  PhysicalModelLayer get layer => super.layer as PhysicalModelLayer;
 
   /// The shape of the layer.
   ///
@@ -1641,7 +1757,7 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
   }
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     if (_clipper != null) {
       _updateClip();
       assert(_clip != null);
@@ -1674,37 +1790,20 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
         }
         return true;
       }());
-      if (needsCompositing) {
-        final PhysicalModelLayer physicalModel = PhysicalModelLayer(
-          clipPath: offsetRRectAsPath,
-          clipBehavior: clipBehavior,
-          elevation: paintShadows ? elevation : 0.0,
-          color: color,
-          shadowColor: shadowColor,
-        );
-        context.pushLayer(physicalModel, super.paint, offset, childPaintBounds: offsetBounds);
-      } else {
-        final Canvas canvas = context.canvas;
-        if (elevation != 0.0 && paintShadows) {
-          // The drawShadow call doesn't add the region of the shadow to the
-          // picture's bounds, so we draw a hardcoded amount of extra space to
-          // account for the maximum potential area of the shadow.
-          // TODO(jsimmons): remove this when Skia does it for us.
-          canvas.drawRect(
-            offsetBounds.inflate(20.0),
-            _RenderPhysicalModelBase._transparentPaint,
-          );
-          canvas.drawShadow(
-            offsetRRectAsPath,
-            shadowColor,
-            elevation,
-            color.alpha != 0xFF,
-          );
-        }
-        canvas.drawRRect(offsetRRect, Paint()..color = color);
-        context.clipRRectAndPaint(offsetRRect, clipBehavior, offsetBounds, () => super.paint(context, offset));
-        assert(context.canvas == canvas, 'canvas changed even though needsCompositing was false');
-      }
+      layer ??= PhysicalModelLayer();
+      layer
+        ..clipPath = offsetRRectAsPath
+        ..clipBehavior = clipBehavior
+        ..elevation = paintShadows ? elevation : 0.0
+        ..color = color
+        ..shadowColor = shadowColor;
+      context.pushLayer(layer, super.paint, offset, childPaintBounds: offsetBounds);
+      assert(() {
+        layer.debugCreator = debugCreator;
+        return true;
+      }());
+    } else {
+      layer = null;
     }
   }
 
@@ -1722,15 +1821,15 @@ class RenderPhysicalModel extends _RenderPhysicalModelBase<RRect> {
 ///
 /// See also:
 ///
-/// * [RenderPhysicalModel], which is optimized for rounded rectangles and
-///   circles.
+///  * [RenderPhysicalModel], which is optimized for rounded rectangles and
+///    circles.
 class RenderPhysicalShape extends _RenderPhysicalModelBase<Path> {
   /// Creates an arbitrary shape clip.
   ///
   /// The [color] and [shape] parameters are required.
   ///
-  /// The [clipper], [elevation], [color] and [shadowColor] must
-  /// not be null.
+  /// The [clipper], [elevation], [color] and [shadowColor] must not be null.
+  /// Additionally, the [elevation] must be non-negative.
   RenderPhysicalShape({
     RenderBox child,
     @required CustomClipper<Path> clipper,
@@ -1739,7 +1838,7 @@ class RenderPhysicalShape extends _RenderPhysicalModelBase<Path> {
     @required Color color,
     Color shadowColor = const Color(0xFF000000),
   }) : assert(clipper != null),
-       assert(elevation != null),
+       assert(elevation != null && elevation >= 0.0),
        assert(color != null),
        assert(shadowColor != null),
        super(
@@ -1748,14 +1847,17 @@ class RenderPhysicalShape extends _RenderPhysicalModelBase<Path> {
          color: color,
          shadowColor: shadowColor,
          clipper: clipper,
-         clipBehavior: clipBehavior
+         clipBehavior: clipBehavior,
        );
+
+  @override
+  PhysicalModelLayer get layer => super.layer as PhysicalModelLayer;
 
   @override
   Path get _defaultClip => Path()..addRect(Offset.zero & size);
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     if (_clipper != null) {
       _updateClip();
       assert(_clip != null);
@@ -1787,37 +1889,20 @@ class RenderPhysicalShape extends _RenderPhysicalModelBase<Path> {
         }
         return true;
       }());
-      if (needsCompositing) {
-        final PhysicalModelLayer physicalModel = PhysicalModelLayer(
-          clipPath: offsetPath,
-          clipBehavior: clipBehavior,
-          elevation: paintShadows ? elevation : 0.0,
-          color: color,
-          shadowColor: shadowColor,
-        );
-        context.pushLayer(physicalModel, super.paint, offset, childPaintBounds: offsetBounds);
-      } else {
-        final Canvas canvas = context.canvas;
-        if (elevation != 0.0 && paintShadows) {
-          // The drawShadow call doesn't add the region of the shadow to the
-          // picture's bounds, so we draw a hardcoded amount of extra space to
-          // account for the maximum potential area of the shadow.
-          // TODO(jsimmons): remove this when Skia does it for us.
-          canvas.drawRect(
-            offsetBounds.inflate(20.0),
-            _RenderPhysicalModelBase._transparentPaint,
-          );
-          canvas.drawShadow(
-            offsetPath,
-            shadowColor,
-            elevation,
-            color.alpha != 0xFF,
-          );
-        }
-        canvas.drawPath(offsetPath, Paint()..color = color..style = PaintingStyle.fill);
-        context.clipPathAndPaint(offsetPath, clipBehavior, offsetBounds, () => super.paint(context, offset));
-        assert(context.canvas == canvas, 'canvas changed even though needsCompositing was false');
-      }
+      layer ??= PhysicalModelLayer();
+      layer
+        ..clipPath = offsetPath
+        ..clipBehavior = clipBehavior
+        ..elevation = paintShadows ? elevation : 0.0
+        ..color = color
+        ..shadowColor = shadowColor;
+      context.pushLayer(layer, super.paint, offset, childPaintBounds: offsetBounds);
+      assert(() {
+        layer.debugCreator = debugCreator;
+        return true;
+      }());
+    } else {
+      layer = null;
     }
   }
 
@@ -1936,16 +2021,16 @@ class RenderDecoratedBox extends RenderProxyBox {
       _painter.paint(context.canvas, offset, filledConfiguration);
       assert(() {
         if (debugSaveCount != context.canvas.getSaveCount()) {
-          throw FlutterError(
-            '${_decoration.runtimeType} painter had mismatching save and restore calls.\n'
-            'Before painting the decoration, the canvas save count was $debugSaveCount. '
-            'After painting it, the canvas save count was ${context.canvas.getSaveCount()}. '
-            'Every call to save() or saveLayer() must be matched by a call to restore().\n'
-            'The decoration was:\n'
-            '  $decoration\n'
-            'The painter was:\n'
-            '  $_painter'
-          );
+          throw FlutterError.fromParts(<DiagnosticsNode>[
+            ErrorSummary('${_decoration.runtimeType} painter had mismatching save and restore calls.'),
+            ErrorDescription(
+              'Before painting the decoration, the canvas save count was $debugSaveCount. '
+              'After painting it, the canvas save count was ${context.canvas.getSaveCount()}. '
+              'Every call to save() or saveLayer() must be matched by a call to restore().'
+            ),
+            DiagnosticsProperty<Decoration>('The decoration was', decoration, style: DiagnosticsTreeStyle.errorProperty),
+            DiagnosticsProperty<BoxPainter>('The painter was', _painter, style: DiagnosticsTreeStyle.errorProperty),
+          ]);
         }
         return true;
       }());
@@ -1979,7 +2064,7 @@ class RenderTransform extends RenderProxyBox {
     AlignmentGeometry alignment,
     TextDirection textDirection,
     this.transformHitTests = true,
-    RenderBox child
+    RenderBox child,
   }) : assert(transform != null),
        super(child) {
     this.transform = transform;
@@ -2088,14 +2173,14 @@ class RenderTransform extends RenderProxyBox {
   }
 
   /// Concatenates a translation by (x, y, z) into the transform.
-  void translate(double x, [double y = 0.0, double z = 0.0]) {
+  void translate(double x, [ double y = 0.0, double z = 0.0 ]) {
     _transform.translate(x, y, z);
     markNeedsPaint();
     markNeedsSemanticsUpdate();
   }
 
   /// Concatenates a scale into the transform.
-  void scale(double x, [double y, double z]) {
+  void scale(double x, [ double y, double z ]) {
     _transform.scale(x, y, z);
     markNeedsPaint();
     markNeedsSemanticsUpdate();
@@ -2122,7 +2207,7 @@ class RenderTransform extends RenderProxyBox {
   }
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     // RenderTransform objects don't check if they are
     // themselves hit, because it's confusing to think about
     // how the untransformed size and the child's transformed
@@ -2131,17 +2216,15 @@ class RenderTransform extends RenderProxyBox {
   }
 
   @override
-  bool hitTestChildren(HitTestResult result, { Offset position }) {
-    if (transformHitTests) {
-      final Matrix4 inverse = Matrix4.tryInvert(_effectiveTransform);
-      if (inverse == null) {
-        // We cannot invert the effective transform. That means the child
-        // doesn't appear on screen and cannot be hit.
-        return false;
-      }
-      position = MatrixUtils.transformPoint(inverse, position);
-    }
-    return super.hitTestChildren(result, position: position);
+  bool hitTestChildren(BoxHitTestResult result, { Offset position }) {
+    assert(!transformHitTests || _effectiveTransform != null);
+    return result.addWithPaintTransform(
+      transform: transformHitTests ? _effectiveTransform : null,
+      position: position,
+      hitTest: (BoxHitTestResult result, Offset position) {
+        return super.hitTestChildren(result, position: position);
+      },
+    );
   }
 
   @override
@@ -2149,10 +2232,18 @@ class RenderTransform extends RenderProxyBox {
     if (child != null) {
       final Matrix4 transform = _effectiveTransform;
       final Offset childOffset = MatrixUtils.getAsTranslation(transform);
-      if (childOffset == null)
-        context.pushTransform(needsCompositing, offset, transform, super.paint);
-      else
+      if (childOffset == null) {
+        layer = context.pushTransform(
+          needsCompositing,
+          offset,
+          transform,
+          super.paint,
+          oldLayer: layer as TransformLayer,
+        );
+      } else {
         super.paint(context, offset + childOffset);
+        layer = null;
+      }
     }
   }
 
@@ -2166,7 +2257,7 @@ class RenderTransform extends RenderProxyBox {
     super.debugFillProperties(properties);
     properties.add(TransformProperty('transform matrix', _transform));
     properties.add(DiagnosticsProperty<Offset>('origin', origin));
-    properties.add(DiagnosticsProperty<Alignment>('alignment', alignment));
+    properties.add(DiagnosticsProperty<AlignmentGeometry>('alignment', alignment));
     properties.add(EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
     properties.add(DiagnosticsProperty<bool>('transformHitTests', transformHitTests));
   }
@@ -2284,51 +2375,55 @@ class RenderFittedBox extends RenderProxyBox {
       final Rect sourceRect = _resolvedAlignment.inscribe(sizes.source, Offset.zero & childSize);
       final Rect destinationRect = _resolvedAlignment.inscribe(sizes.destination, Offset.zero & size);
       _hasVisualOverflow = sourceRect.width < childSize.width || sourceRect.height < childSize.height;
+      assert(scaleX.isFinite && scaleY.isFinite);
       _transform = Matrix4.translationValues(destinationRect.left, destinationRect.top, 0.0)
         ..scale(scaleX, scaleY, 1.0)
         ..translate(-sourceRect.left, -sourceRect.top);
+      assert(_transform.storage.every((double value) => value.isFinite));
     }
   }
 
-  void _paintChildWithTransform(PaintingContext context, Offset offset) {
+  TransformLayer _paintChildWithTransform(PaintingContext context, Offset offset) {
     final Offset childOffset = MatrixUtils.getAsTranslation(_transform);
     if (childOffset == null)
-      context.pushTransform(needsCompositing, offset, _transform, super.paint);
+      return context.pushTransform(needsCompositing, offset, _transform, super.paint,
+          oldLayer: layer is TransformLayer ? layer as TransformLayer : null);
     else
       super.paint(context, offset + childOffset);
+    return null;
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    if (size.isEmpty)
+    if (size.isEmpty || child.size.isEmpty)
       return;
     _updatePaintData();
     if (child != null) {
       if (_hasVisualOverflow)
-        context.pushClipRect(needsCompositing, offset, Offset.zero & size, _paintChildWithTransform);
+        layer = context.pushClipRect(needsCompositing, offset, Offset.zero & size, _paintChildWithTransform,
+            oldLayer: layer is ClipRectLayer ? layer as ClipRectLayer : null);
       else
-        _paintChildWithTransform(context, offset);
+        layer = _paintChildWithTransform(context, offset);
     }
   }
 
   @override
-  bool hitTestChildren(HitTestResult result, { Offset position }) {
-    if (size.isEmpty)
+  bool hitTestChildren(BoxHitTestResult result, { Offset position }) {
+    if (size.isEmpty || child?.size?.isEmpty == true)
       return false;
     _updatePaintData();
-    final Matrix4 inverse = Matrix4.tryInvert(_transform);
-    if (inverse == null) {
-      // We cannot invert the effective transform. That means the child
-      // doesn't appear on screen and cannot be hit.
-      return false;
-    }
-    position = MatrixUtils.transformPoint(inverse, position);
-    return super.hitTestChildren(result, position: position);
+    return result.addWithPaintTransform(
+      transform: _transform,
+      position: position,
+      hitTest: (BoxHitTestResult result, Offset position) {
+        return super.hitTestChildren(result, position: position);
+      },
+    );
   }
 
   @override
   void applyPaintTransform(RenderBox child, Matrix4 transform) {
-    if (size.isEmpty) {
+    if (size.isEmpty || child.size.isEmpty) {
       transform.setZero();
     } else {
       _updatePaintData();
@@ -2340,7 +2435,7 @@ class RenderFittedBox extends RenderProxyBox {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(EnumProperty<BoxFit>('fit', fit));
-    properties.add(DiagnosticsProperty<Alignment>('alignment', alignment));
+    properties.add(DiagnosticsProperty<AlignmentGeometry>('alignment', alignment));
     properties.add(EnumProperty<TextDirection>('textDirection', textDirection, defaultValue: null));
   }
 }
@@ -2361,7 +2456,7 @@ class RenderFractionalTranslation extends RenderProxyBox {
   RenderFractionalTranslation({
     @required Offset translation,
     this.transformHitTests = true,
-    RenderBox child
+    RenderBox child,
   }) : assert(translation != null),
        _translation = translation,
        super(child);
@@ -2378,10 +2473,11 @@ class RenderFractionalTranslation extends RenderProxyBox {
       return;
     _translation = value;
     markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     // RenderFractionalTranslation objects don't check if they are
     // themselves hit, because it's confusing to think about
     // how the untransformed size and the child's transformed
@@ -2398,15 +2494,17 @@ class RenderFractionalTranslation extends RenderProxyBox {
   bool transformHitTests;
 
   @override
-  bool hitTestChildren(HitTestResult result, { Offset position }) {
+  bool hitTestChildren(BoxHitTestResult result, { Offset position }) {
     assert(!debugNeedsLayout);
-    if (transformHitTests) {
-      position = Offset(
-        position.dx - translation.dx * size.width,
-        position.dy - translation.dy * size.height,
-      );
-    }
-    return super.hitTestChildren(result, position: position);
+    return result.addWithPaintOffset(
+      offset: transformHitTests
+          ? Offset(translation.dx * size.width, translation.dy * size.height)
+          : null,
+      position: position,
+      hitTest: (BoxHitTestResult result, Offset position) {
+        return super.hitTestChildren(result, position: position);
+      },
+    );
   }
 
   @override
@@ -2456,13 +2554,25 @@ typedef PointerUpEventListener = void Function(PointerUpEvent event);
 /// Used by [Listener] and [RenderPointerListener].
 typedef PointerCancelEventListener = void Function(PointerCancelEvent event);
 
-/// Calls callbacks in response to pointer events.
+/// Signature for listening to [PointerSignalEvent] events.
+///
+/// Used by [Listener] and [RenderPointerListener].
+typedef PointerSignalEventListener = void Function(PointerSignalEvent event);
+
+/// Calls callbacks in response to common pointer events.
+///
+/// It responds to events that can construct gestures, such as when the
+/// pointer is pressed, moved, then released or canceled.
+///
+/// It does not respond to events that are exclusive to mouse, such as when the
+/// mouse enters, exits or hovers a region without pressing any buttons. For
+/// these events, use [RenderMouseRegion].
 ///
 /// If it has a child, defers to the child for sizing behavior.
 ///
 /// If it does not have a child, grows to fit the parent-provided constraints.
 class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
-  /// Creates a render object that forwards point events to callbacks.
+  /// Creates a render object that forwards pointer events to callbacks.
   ///
   /// The [behavior] argument defaults to [HitTestBehavior.deferToChild].
   RenderPointerListener({
@@ -2470,11 +2580,14 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
     this.onPointerMove,
     this.onPointerUp,
     this.onPointerCancel,
+    this.onPointerSignal,
     HitTestBehavior behavior = HitTestBehavior.deferToChild,
-    RenderBox child
+    RenderBox child,
   }) : super(behavior: behavior, child: child);
 
-  /// Called when a pointer comes into contact with the screen at this object.
+  /// Called when a pointer comes into contact with the screen (for touch
+  /// pointers), or has its button pressed (for mouse pointers) at this widget's
+  /// location.
   PointerDownEventListener onPointerDown;
 
   /// Called when a pointer that triggered an [onPointerDown] changes position.
@@ -2487,6 +2600,9 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
   /// Called when the input from a pointer that triggered an [onPointerDown] is
   /// no longer directed towards this receiver.
   PointerCancelEventListener onPointerCancel;
+
+  /// Called when a pointer signal occurs over this object.
+  PointerSignalEventListener onPointerSignal;
 
   @override
   void performResize() {
@@ -2504,24 +2620,249 @@ class RenderPointerListener extends RenderProxyBoxWithHitTestBehavior {
       return onPointerUp(event);
     if (onPointerCancel != null && event is PointerCancelEvent)
       return onPointerCancel(event);
+    if (onPointerSignal != null && event is PointerSignalEvent)
+      return onPointerSignal(event);
   }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final List<String> listeners = <String>[];
-    if (onPointerDown != null)
-      listeners.add('down');
-    if (onPointerMove != null)
-      listeners.add('move');
-    if (onPointerUp != null)
-      listeners.add('up');
-    if (onPointerCancel != null)
-      listeners.add('cancel');
-    if (listeners.isEmpty)
-      listeners.add('<none>');
-    properties.add(IterableProperty<String>('listeners', listeners));
-    // TODO(jacobr): add raw listeners to the diagnostics data.
+    properties.add(FlagsSummary<Function>(
+      'listeners',
+      <String, Function>{
+        'down': onPointerDown,
+        'move': onPointerMove,
+        'up': onPointerUp,
+        'cancel': onPointerCancel,
+        'signal': onPointerSignal,
+      },
+      ifEmpty: '<none>',
+    ));
+  }
+}
+
+/// Calls callbacks in response to pointer events that are exclusive to mice.
+///
+/// It responds to events that are related to hovering, i.e. when the mouse
+/// enters, exits (with or without pressing buttons), or moves over a region
+/// without pressing buttons.
+///
+/// It does not respond to common events that construct gestures, such as when
+/// the pointer is pressed, moved, then released or canceled. For these events,
+/// use [RenderPointerListener].
+///
+/// If it has a child, it defers to the child for sizing behavior.
+///
+/// If it does not have a child, it grows to fit the parent-provided constraints.
+///
+/// See also:
+///
+///  * [MouseRegion], a widget that listens to hover events using
+///    [RenderMouseRegion].
+class RenderMouseRegion extends RenderProxyBox {
+  /// Creates a render object that forwards pointer events to callbacks.
+  ///
+  /// All parameters are optional. By default this method creates an opaque
+  /// mouse region with no callbacks.
+  RenderMouseRegion({
+    PointerEnterEventListener onEnter,
+    PointerHoverEventListener onHover,
+    PointerExitEventListener onExit,
+    bool opaque = true,
+    RenderBox child,
+  }) : assert(opaque != null),
+       _onEnter = onEnter,
+       _onHover = onHover,
+       _onExit = onExit,
+       _opaque = opaque,
+       _annotationIsActive = false,
+       super(child) {
+    _hoverAnnotation = MouseTrackerAnnotation(
+      onEnter: _handleEnter,
+      onHover: _handleHover,
+      onExit: _handleExit,
+    );
+  }
+
+  /// Whether this object should prevent [RenderMouseRegion]s visually behind it
+  /// from detecting the pointer, thus affecting how their [onHover], [onEnter],
+  /// and [onExit] behave.
+  ///
+  /// If [opaque] is true, this object will absorb the mouse pointer and
+  /// prevent this object's siblings (or any other objects that are not
+  /// ancestors or descendants of this object) from detecting the mouse
+  /// pointer even when the pointer is within their areas.
+  ///
+  /// If [opaque] is false, this object will not affect how [RenderMouseRegion]s
+  /// behind it behave, which will detect the mouse pointer as long as the
+  /// pointer is within their areas.
+  ///
+  /// This defaults to true.
+  bool get opaque => _opaque;
+  bool _opaque;
+  set opaque(bool value) {
+    if (_opaque != value) {
+      _opaque = value;
+      _markPropertyUpdated(mustRepaint: true);
+    }
+  }
+
+  /// Called when a mouse pointer starts being contained by the region (with or
+  /// without buttons pressed) for any reason.
+  ///
+  /// This callback is always matched by a later [onExit].
+  ///
+  /// See also:
+  ///
+  ///  * [MouseRegion.onEnter], which uses this callback.
+  PointerEnterEventListener get onEnter => _onEnter;
+  set onEnter(PointerEnterEventListener value) {
+    if (_onEnter != value) {
+      _onEnter = value;
+      _markPropertyUpdated(mustRepaint: false);
+    }
+  }
+  PointerEnterEventListener _onEnter;
+  void _handleEnter(PointerEnterEvent event) {
+    if (_onEnter != null)
+      _onEnter(event);
+  }
+
+  /// Called when a pointer changes position without buttons pressed and the end
+  /// position is within the region.
+  PointerHoverEventListener get onHover => _onHover;
+  set onHover(PointerHoverEventListener value) {
+    if (_onHover != value) {
+      _onHover = value;
+      _markPropertyUpdated(mustRepaint: false);
+    }
+  }
+  PointerHoverEventListener _onHover;
+  void _handleHover(PointerHoverEvent event) {
+    if (_onHover != null)
+      _onHover(event);
+  }
+
+  /// Called when a pointer is no longer contained by the region (with or
+  /// without buttons pressed) for any reason.
+  ///
+  /// This callback is always matched by an earlier [onEnter].
+  ///
+  /// See also:
+  ///
+  ///  * [MouseRegion.onExit], which uses this callback, but is not triggered in
+  ///    certain cases and does not always match its earier [MouseRegion.onEnter].
+  PointerExitEventListener get onExit => _onExit;
+  set onExit(PointerExitEventListener value) {
+    if (_onExit != value) {
+      _onExit = value;
+      _markPropertyUpdated(mustRepaint: false);
+    }
+  }
+  PointerExitEventListener _onExit;
+  void _handleExit(PointerExitEvent event) {
+    if (_onExit != null)
+      _onExit(event);
+  }
+
+  // Object used for annotation of the layer used for hover hit detection.
+  MouseTrackerAnnotation _hoverAnnotation;
+
+  /// Object used for annotation of the layer used for hover hit detection.
+  ///
+  /// This is only public to allow for testing of Listener widgets. Do not call
+  /// in other contexts.
+  @visibleForTesting
+  MouseTrackerAnnotation get hoverAnnotation => _hoverAnnotation;
+
+  // Call this method when a property has changed and might affect the
+  // `_annotationIsActive` bit.
+  //
+  // If `mustRepaint` is false, this method does NOT call `markNeedsPaint`
+  // unless the `_annotationIsActive` bit is changed. If there is a property
+  // that needs updating while `_annotationIsActive` stays true, make
+  // `mustRepaint` true.
+  //
+  // This method must not be called during `paint`.
+  void _markPropertyUpdated({@required bool mustRepaint}) {
+    assert(owner == null || !owner.debugDoingPaint);
+    final bool newAnnotationIsActive = (
+        _onEnter != null ||
+        _onHover != null ||
+        _onExit != null ||
+        opaque
+      ) && RendererBinding.instance.mouseTracker.mouseIsConnected;
+    _setAnnotationIsActive(newAnnotationIsActive);
+    if (mustRepaint)
+      markNeedsPaint();
+  }
+
+  void _setAnnotationIsActive(bool value) {
+    final bool annotationWasActive = _annotationIsActive;
+    _annotationIsActive = value;
+    if (annotationWasActive != value) {
+      markNeedsPaint();
+      markNeedsCompositingBitsUpdate();
+    }
+  }
+
+  void _handleUpdatedMouseIsConnected() {
+    _markPropertyUpdated(mustRepaint: false);
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    // Add a listener to listen for changes in mouseIsConnected.
+    RendererBinding.instance.mouseTracker.addListener(_handleUpdatedMouseIsConnected);
+    _markPropertyUpdated(mustRepaint: false);
+  }
+
+  @override
+  void detach() {
+    RendererBinding.instance.mouseTracker.removeListener(_handleUpdatedMouseIsConnected);
+    super.detach();
+  }
+
+  bool _annotationIsActive;
+
+  @override
+  bool get needsCompositing => super.needsCompositing || _annotationIsActive;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (_annotationIsActive) {
+      // Annotated region layers are not retained because they do not create engine layers.
+      final AnnotatedRegionLayer<MouseTrackerAnnotation> layer = AnnotatedRegionLayer<MouseTrackerAnnotation>(
+        _hoverAnnotation,
+        size: size,
+        offset: offset,
+        opaque: opaque,
+      );
+      context.pushLayer(layer, super.paint, offset);
+    } else {
+      super.paint(context, offset);
+    }
+  }
+
+  @override
+  void performResize() {
+    size = constraints.biggest;
+  }
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(FlagsSummary<Function>(
+      'listeners',
+      <String, Function>{
+        'enter': onEnter,
+        'hover': onHover,
+        'exit': onExit,
+      },
+      ifEmpty: '<none>',
+    ));
+    properties.add(DiagnosticsProperty<bool>('opaque', opaque, defaultValue: true));
   }
 }
 
@@ -2572,7 +2913,7 @@ class RenderRepaintBoundary extends RenderProxyBox {
   /// will give you a 1:1 mapping between logical pixels and the output pixels
   /// in the image.
   ///
-  /// ## Sample code
+  /// {@tool snippet}
   ///
   /// The following is an example of how to go from a `GlobalKey` on a
   /// `RepaintBoundary` to a PNG:
@@ -2610,14 +2951,16 @@ class RenderRepaintBoundary extends RenderProxyBox {
   ///   }
   /// }
   /// ```
+  /// {@end-tool}
   ///
   /// See also:
   ///
   ///  * [OffsetLayer.toImage] for a similar API at the layer level.
   ///  * [dart:ui.Scene.toImage] for more information about the image returned.
-  Future<ui.Image> toImage({double pixelRatio = 1.0}) {
+  Future<ui.Image> toImage({ double pixelRatio = 1.0 }) {
     assert(!debugNeedsPaint);
-    return layer.toImage(Offset.zero & size, pixelRatio: pixelRatio);
+    final OffsetLayer offsetLayer = layer as OffsetLayer;
+    return offsetLayer.toImage(Offset.zero & size, pixelRatio: pixelRatio);
   }
 
 
@@ -2728,13 +3071,15 @@ class RenderRepaintBoundary extends RenderProxyBox {
 class RenderIgnorePointer extends RenderProxyBox {
   /// Creates a render object that is invisible to hit testing.
   ///
-  /// The [ignoring] argument must not be null. If [ignoringSemantics], this
-  /// render object will be ignored for semantics if [ignoring] is true.
+  /// The [ignoring] argument must not be null. If [ignoringSemantics] is null,
+  /// this render object will be ignored for semantics if [ignoring] is true.
   RenderIgnorePointer({
     RenderBox child,
     bool ignoring = true,
-    bool ignoringSemantics
-  }) : _ignoring = ignoring, _ignoringSemantics = ignoringSemantics, super(child) {
+    bool ignoringSemantics,
+  }) : _ignoring = ignoring,
+       _ignoringSemantics = ignoringSemantics,
+       super(child) {
     assert(_ignoring != null);
   }
 
@@ -2749,7 +3094,7 @@ class RenderIgnorePointer extends RenderProxyBox {
     if (value == _ignoring)
       return;
     _ignoring = value;
-    if (ignoringSemantics == null)
+    if (_ignoringSemantics == null || !_ignoringSemantics)
       markNeedsSemanticsUpdate();
   }
 
@@ -2769,11 +3114,11 @@ class RenderIgnorePointer extends RenderProxyBox {
       markNeedsSemanticsUpdate();
   }
 
-  bool get _effectiveIgnoringSemantics => ignoringSemantics == null ? ignoring : ignoringSemantics;
+  bool get _effectiveIgnoringSemantics => ignoringSemantics ?? ignoring;
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
-    return ignoring ? false : super.hitTest(result, position: position);
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
+    return !ignoring && super.hitTest(result, position: position);
   }
 
   // TODO(ianh): figure out a way to still include labels and flags in
@@ -2794,7 +3139,7 @@ class RenderIgnorePointer extends RenderProxyBox {
         'ignoringSemantics',
         _effectiveIgnoringSemantics,
         description: ignoringSemantics == null ? 'implicitly $_effectiveIgnoringSemantics' : null,
-      )
+      ),
     );
   }
 }
@@ -2806,7 +3151,7 @@ class RenderOffstage extends RenderProxyBox {
   /// Creates an offstage render object.
   RenderOffstage({
     bool offstage = true,
-    RenderBox child
+    RenderBox child,
   }) : assert(offstage != null),
        _offstage = offstage,
        super(child);
@@ -2882,7 +3227,7 @@ class RenderOffstage extends RenderProxyBox {
   }
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     return !offstage && super.hitTest(result, position: position);
   }
 
@@ -2975,10 +3320,10 @@ class RenderAbsorbPointer extends RenderProxyBox {
       markNeedsSemanticsUpdate();
   }
 
-  bool get _effectiveIgnoringSemantics => ignoringSemantics == null ? absorbing : ignoringSemantics;
+  bool get _effectiveIgnoringSemantics => ignoringSemantics ?? absorbing;
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
     return absorbing
         ? size.contains(position)
         : super.hitTest(result, position: position);
@@ -3017,7 +3362,7 @@ class RenderMetaData extends RenderProxyBoxWithHitTestBehavior {
   RenderMetaData({
     this.metaData,
     HitTestBehavior behavior = HitTestBehavior.deferToChild,
-    RenderBox child
+    RenderBox child,
   }) : super(behavior: behavior, child: child);
 
   /// Opaque meta data ignored by the render tree
@@ -3042,7 +3387,7 @@ class RenderSemanticsGestureHandler extends RenderProxyBox {
     GestureLongPressCallback onLongPress,
     GestureDragUpdateCallback onHorizontalDragUpdate,
     GestureDragUpdateCallback onVerticalDragUpdate,
-    this.scrollFactor = 0.8
+    this.scrollFactor = 0.8,
   }) : assert(scrollFactor != null),
        _onTap = onTap,
        _onLongPress = onLongPress,
@@ -3072,7 +3417,7 @@ class RenderSemanticsGestureHandler extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-   /// Called when the user taps on the render object.
+  /// Called when the user taps on the render object.
   GestureTapCallback get onTap => _onTap;
   GestureTapCallback _onTap;
   set onTap(GestureTapCallback value) {
@@ -3196,15 +3541,12 @@ class RenderSemanticsGestureHandler extends RenderProxyBox {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    final List<String> gestures = <String>[];
-    if (onTap != null)
-      gestures.add('tap');
-    if (onLongPress != null)
-      gestures.add('long press');
-    if (onHorizontalDragUpdate != null)
-      gestures.add('horizontal scroll');
-    if (onVerticalDragUpdate != null)
-      gestures.add('vertical scroll');
+    final List<String> gestures = <String>[
+      if (onTap != null) 'tap',
+      if (onLongPress != null) 'long press',
+      if (onHorizontalDragUpdate != null) 'horizontal scroll',
+      if (onVerticalDragUpdate != null) 'vertical scroll',
+    ];
     if (gestures.isEmpty)
       gestures.add('<none>');
     properties.add(IterableProperty<String>('gestures', gestures));
@@ -3228,16 +3570,22 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     bool toggled,
     bool selected,
     bool button,
+    bool link,
     bool header,
     bool textField,
+    bool readOnly,
+    bool focusable,
     bool focused,
     bool inMutuallyExclusiveGroup,
     bool obscured,
+    bool multiline,
     bool scopesRoute,
     bool namesRoute,
     bool hidden,
     bool image,
     bool liveRegion,
+    int maxValueLength,
+    int currentValueLength,
     String label,
     String value,
     String increasedValue,
@@ -3275,14 +3623,20 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
        _toggled = toggled,
        _selected = selected,
        _button = button,
+       _link = link,
        _header = header,
        _textField = textField,
+       _readOnly = readOnly,
+       _focusable = focusable,
        _focused = focused,
        _inMutuallyExclusiveGroup = inMutuallyExclusiveGroup,
        _obscured = obscured,
+       _multiline = multiline,
        _scopesRoute = scopesRoute,
        _namesRoute = namesRoute,
        _liveRegion = liveRegion,
+       _maxValueLength = maxValueLength,
+       _currentValueLength = currentValueLength,
        _hidden = hidden,
        _image = image,
        _onDismiss = onDismiss,
@@ -3335,15 +3689,16 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
   /// Whether descendants of this [RenderObject] are allowed to add semantic
   /// information to the [SemanticsNode] annotated by this widget.
   ///
-  /// When set to false descendants are allowed to annotate [SemanticNode]s of
+  /// When set to false descendants are allowed to annotate [SemanticsNode]s of
   /// their parent with the semantic information they want to contribute to the
   /// semantic tree.
   /// When set to true the only way for descendants to contribute semantic
   /// information to the semantic tree is to introduce new explicit
-  /// [SemanticNode]s to the tree.
+  /// [SemanticsNode]s to the tree.
   ///
-  /// This setting is often used in combination with [isSemanticBoundary] to
-  /// create semantic boundaries that are either writable or not for children.
+  /// This setting is often used in combination with
+  /// [SemanticsConfiguration.isSemanticBoundary] to create semantic boundaries
+  /// that are either writable or not for children.
   bool get explicitChildNodes => _explicitChildNodes;
   bool _explicitChildNodes;
   set explicitChildNodes(bool value) {
@@ -3354,7 +3709,7 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-  /// Whether decendants of this [RenderObject] should have their semantic
+  /// Whether descendants of this [RenderObject] should have their semantic
   /// information ignored.
   ///
   /// When this flag is set to true, all child semantics nodes are ignored.
@@ -3370,8 +3725,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-  /// If non-null, sets the [SemanticsNode.hasCheckedState] semantic to true and
-  /// the [SemanticsNode.isChecked] semantic to the given value.
+  /// If non-null, sets the [SemanticsFlag.hasCheckedState] semantic to true and
+  /// the [SemanticsConfiguration.isChecked] semantic to the given value.
   bool get checked => _checked;
   bool _checked;
   set checked(bool value) {
@@ -3381,8 +3736,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-  /// If non-null, sets the [SemanticsNode.hasEnabledState] semantic to true and
-  /// the [SemanticsNode.isEnabled] semantic to the given value.
+  /// If non-null, sets the [SemanticsFlag.hasEnabledState] semantic to true and
+  /// the [SemanticsConfiguration.isEnabled] semantic to the given value.
   bool get enabled => _enabled;
   bool _enabled;
   set enabled(bool value) {
@@ -3392,8 +3747,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-  /// If non-null, sets the [SemanticsNode.isSelected] semantic to the given
-  /// value.
+  /// If non-null, sets the [SemanticsConfiguration.isSelected] semantic to the
+  /// given value.
   bool get selected => _selected;
   bool _selected;
   set selected(bool value) {
@@ -3403,13 +3758,24 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     markNeedsSemanticsUpdate();
   }
 
-  /// If non-null, sets the [SemanticsNode.isButton] semantic to the given value.
+  /// If non-null, sets the [SemanticsConfiguration.isButton] semantic to the
+  /// given value.
   bool get button => _button;
   bool _button;
   set button(bool value) {
     if (button == value)
       return;
     _button = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.isLink] semantic to the given value.
+  bool get link => _link;
+  bool _link;
+  set link(bool value) {
+    if (link == value)
+      return;
+    _link = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -3430,6 +3796,26 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     if (textField == value)
       return;
     _textField = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.isReadOnly] semantic to the given value.
+  bool get readOnly => _readOnly;
+  bool _readOnly;
+  set readOnly(bool value) {
+    if (readOnly == value)
+      return;
+    _readOnly = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.isFocusable] semantic to the given value.
+  bool get focusable => _focusable;
+  bool _focusable;
+  set focusable(bool value) {
+    if (focusable == value)
+      return;
+    _focusable = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -3462,6 +3848,17 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     if (obscured == value)
       return;
     _obscured = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.isMultiline] semantic to the given
+  /// value.
+  bool get multiline => _multiline;
+  bool _multiline;
+  set multiline(bool value) {
+    if (multiline == value)
+      return;
+    _multiline = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -3506,7 +3903,7 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     _image = value;
   }
 
-  /// If non-null, sets the [SemanticsNode.isLiveRegion] semantic to the given
+  /// If non-null, sets the [SemanticsFlag.isLiveRegion] semantic to the given
   /// value.
   bool get liveRegion => _liveRegion;
   bool _liveRegion;
@@ -3514,6 +3911,28 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
     if (_liveRegion == value)
       return;
     _liveRegion = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.maxValueLength] semantic to the given
+  /// value.
+  int get maxValueLength => _maxValueLength;
+  int _maxValueLength;
+  set maxValueLength(int value) {
+    if (_maxValueLength == value)
+      return;
+    _maxValueLength = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  /// If non-null, sets the [SemanticsNode.currentValueLength] semantic to the
+  /// given value.
+  int get currentValueLength => _currentValueLength;
+  int _currentValueLength;
+  set currentValueLength(int value) {
+    if (_currentValueLength == value)
+      return;
+    _currentValueLength = value;
     markNeedsSemanticsUpdate();
   }
 
@@ -3966,8 +4385,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
   /// See also:
   ///
   ///  * [onDidLoseAccessibilityFocus], which is invoked when the accessibility
-  ///    focus is removed from the node
-  ///  * [FocusNode], [FocusScope], [FocusManager], which manage the input focus
+  ///    focus is removed from the node.
+  ///  * [FocusNode], [FocusScope], [FocusManager], which manage the input focus.
   VoidCallback get onDidGainAccessibilityFocus => _onDidGainAccessibilityFocus;
   VoidCallback _onDidGainAccessibilityFocus;
   set onDidGainAccessibilityFocus(VoidCallback handler) {
@@ -3994,8 +4413,8 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
   /// See also:
   ///
   ///  * [onDidGainAccessibilityFocus], which is invoked when the node gains
-  ///    accessibility focus
-  ///  * [FocusNode], [FocusScope], [FocusManager], which manage the input focus
+  ///    accessibility focus.
+  ///  * [FocusNode], [FocusScope], [FocusManager], which manage the input focus.
   VoidCallback get onDidLoseAccessibilityFocus => _onDidLoseAccessibilityFocus;
   VoidCallback _onDidLoseAccessibilityFocus;
   set onDidLoseAccessibilityFocus(VoidCallback handler) {
@@ -4015,7 +4434,7 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
   ///
   /// See also:
   ///
-  ///   * [CustomSemanticsAction], for an explaination of custom actions.
+  ///  * [CustomSemanticsAction], for an explanation of custom actions.
   Map<CustomSemanticsAction, VoidCallback> get customSemanticsActions => _customSemanticsActions;
   Map<CustomSemanticsAction, VoidCallback> _customSemanticsActions;
   set customSemanticsActions(Map<CustomSemanticsAction, VoidCallback> value) {
@@ -4031,7 +4450,6 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
       return;
     super.visitChildrenForSemantics(visitor);
   }
-
 
   @override
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
@@ -4053,16 +4471,24 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
       config.isSelected = selected;
     if (button != null)
       config.isButton = button;
+    if (link != null)
+      config.isLink = link;
     if (header != null)
       config.isHeader = header;
     if (textField != null)
       config.isTextField = textField;
+    if (readOnly != null)
+      config.isReadOnly = readOnly;
+    if (focusable != null)
+      config.isFocusable = focusable;
     if (focused != null)
       config.isFocused = focused;
     if (inMutuallyExclusiveGroup != null)
       config.isInMutuallyExclusiveGroup = inMutuallyExclusiveGroup;
     if (obscured != null)
       config.isObscured = obscured;
+    if (multiline != null)
+      config.isMultiline = multiline;
     if (hidden != null)
       config.isHidden = hidden;
     if (image != null)
@@ -4085,6 +4511,12 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
       config.namesRoute = namesRoute;
     if (liveRegion != null)
       config.liveRegion = liveRegion;
+    if (maxValueLength != null) {
+      config.maxValueLength = maxValueLength;
+    }
+    if (currentValueLength != null) {
+      config.currentValueLength = currentValueLength;
+    }
     if (textDirection != null)
       config.textDirection = textDirection;
     if (sortKey != null)
@@ -4238,7 +4670,11 @@ class RenderSemanticsAnnotations extends RenderProxyBox {
 class RenderBlockSemantics extends RenderProxyBox {
   /// Create a render object that blocks semantics for nodes below it in paint
   /// order.
-  RenderBlockSemantics({ RenderBox child, bool blocking = true, }) : _blocking = blocking, super(child);
+  RenderBlockSemantics({
+    RenderBox child,
+    bool blocking = true,
+  }) : _blocking = blocking,
+       super(child);
 
   /// Whether this render object is blocking semantics of previously painted
   /// [RenderObject]s below a common semantics boundary from the semantic tree.
@@ -4297,7 +4733,8 @@ class RenderExcludeSemantics extends RenderProxyBox {
   RenderExcludeSemantics({
     RenderBox child,
     bool excluding = true,
-  }) : _excluding = excluding, super(child) {
+  }) : _excluding = excluding,
+       super(child) {
     assert(_excluding != null);
   }
 
@@ -4342,8 +4779,8 @@ class RenderIndexedSemantics extends RenderProxyBox {
     RenderBox child,
     @required int index,
   }) : assert(index != null),
-        _index = index,
-        super(child);
+       _index = index,
+       super(child);
 
   /// The index used to annotated child semantics.
   int get index => _index;
@@ -4407,7 +4844,16 @@ class RenderLeaderLayer extends RenderProxyBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    context.pushLayer(LeaderLayer(link: link, offset: offset), super.paint, Offset.zero);
+    if (layer == null) {
+      layer = LeaderLayer(link: link, offset: offset);
+    } else {
+      final LeaderLayer leaderLayer = layer as LeaderLayer;
+      leaderLayer
+        ..link = link
+        ..offset = offset;
+    }
+    context.pushLayer(layer, super.paint, Offset.zero);
+    assert(layer != null);
   }
 
   @override
@@ -4424,7 +4870,7 @@ class RenderLeaderLayer extends RenderProxyBox {
 ///
 /// Hit testing on descendants of this render object will only work if the
 /// target position is within the box that this render object's parent considers
-/// to be hitable.
+/// to be hittable.
 ///
 /// See also:
 ///
@@ -4468,7 +4914,7 @@ class RenderFollowerLayer extends RenderProxyBox {
   ///
   /// When the render object is not linked, then: if [showWhenUnlinked] is true,
   /// the child is visible and not repositioned; if it is false, then child is
-  /// hidden.
+  /// hidden, and its hit testing is also disabled.
   bool get showWhenUnlinked => _showWhenUnlinked;
   bool _showWhenUnlinked;
   set showWhenUnlinked(bool value) {
@@ -4493,7 +4939,7 @@ class RenderFollowerLayer extends RenderProxyBox {
 
   @override
   void detach() {
-    _layer = null;
+    layer = null;
     super.detach();
   }
 
@@ -4501,7 +4947,8 @@ class RenderFollowerLayer extends RenderProxyBox {
   bool get alwaysNeedsCompositing => true;
 
   /// The layer we created when we were last painted.
-  FollowerLayer _layer;
+  @override
+  FollowerLayer get layer => super.layer as FollowerLayer;
 
   /// Return the transform that was used in the last composition phase, if any.
   ///
@@ -4510,11 +4957,14 @@ class RenderFollowerLayer extends RenderProxyBox {
   /// [FollowerLayer.getLastTransform]), this returns the identity matrix (see
   /// [new Matrix4.identity].
   Matrix4 getCurrentTransform() {
-    return _layer?.getLastTransform() ?? Matrix4.identity();
+    return layer?.getLastTransform() ?? Matrix4.identity();
   }
 
   @override
-  bool hitTest(HitTestResult result, { Offset position }) {
+  bool hitTest(BoxHitTestResult result, { Offset position }) {
+    // Disables the hit testing if this render object is hidden.
+    if (link.leader == null && !showWhenUnlinked)
+      return false;
     // RenderFollowerLayer objects don't check if they are
     // themselves hit, because it's confusing to think about
     // how the untransformed size and the child's transformed
@@ -4523,31 +4973,38 @@ class RenderFollowerLayer extends RenderProxyBox {
   }
 
   @override
-  bool hitTestChildren(HitTestResult result, { Offset position }) {
-    final Matrix4 inverse = Matrix4.tryInvert(getCurrentTransform());
-    if (inverse == null) {
-      // We cannot invert the effective transform. That means the child
-      // doesn't appear on screen and cannot be hit.
-      return false;
-    }
-    position = MatrixUtils.transformPoint(inverse, position);
-    return super.hitTestChildren(result, position: position);
+  bool hitTestChildren(BoxHitTestResult result, { Offset position }) {
+    return result.addWithPaintTransform(
+      transform: getCurrentTransform(),
+      position: position,
+      hitTest: (BoxHitTestResult result, Offset position) {
+        return super.hitTestChildren(result, position: position);
+      },
+    );
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
     assert(showWhenUnlinked != null);
-    _layer = FollowerLayer(
-      link: link,
-      showWhenUnlinked: showWhenUnlinked,
-      linkedOffset: this.offset,
-      unlinkedOffset: offset,
-    );
+    if (layer == null) {
+      layer = FollowerLayer(
+        link: link,
+        showWhenUnlinked: showWhenUnlinked,
+        linkedOffset: this.offset,
+        unlinkedOffset: offset,
+      );
+    } else {
+      layer
+        ..link = link
+        ..showWhenUnlinked = showWhenUnlinked
+        ..linkedOffset = this.offset
+        ..unlinkedOffset = offset;
+    }
     context.pushLayer(
-      _layer,
+      layer,
       super.paint,
       Offset.zero,
-      childPaintBounds: Rect.fromLTRB(
+      childPaintBounds: const Rect.fromLTRB(
         // We don't know where we'll end up, so we have no idea what our cull rect should be.
         double.negativeInfinity,
         double.negativeInfinity,
@@ -4576,8 +5033,8 @@ class RenderFollowerLayer extends RenderProxyBox {
 ///
 /// See also:
 ///
-///   * [Layer.find], for an example of how this value is retrieved.
-///   * [AnnotatedRegionLayer], the layer this render object creates.
+///  * [Layer.find], for an example of how this value is retrieved.
+///  * [AnnotatedRegionLayer], the layer this render object creates.
 class RenderAnnotatedRegion<T> extends RenderProxyBox {
 
   /// Creates a new [RenderAnnotatedRegion] to insert [value] into the
@@ -4622,7 +5079,12 @@ class RenderAnnotatedRegion<T> extends RenderProxyBox {
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    final AnnotatedRegionLayer<T> layer = AnnotatedRegionLayer<T>(value, size: sized ? size : null);
+    // Annotated region layers are not retained because they do not create engine layers.
+    final AnnotatedRegionLayer<T> layer = AnnotatedRegionLayer<T>(
+      value,
+      size: sized ? size : null,
+      offset: sized ? offset : null,
+    );
     context.pushLayer(layer, super.paint, offset);
   }
 }

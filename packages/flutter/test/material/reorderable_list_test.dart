@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ void main() {
       );
     }
 
-    Widget build({Widget header, Axis scrollDirection = Axis.vertical, TextDirection textDirection = TextDirection.ltr}) {
+    Widget build({ Widget header, Axis scrollDirection = Axis.vertical, TextDirection textDirection = TextDirection.ltr }) {
       return MaterialApp(
         home: Directionality(
           textDirection: textDirection,
@@ -129,10 +129,10 @@ void main() {
               key: Key('Last item'),
               height: itemHeight,
               child: Text('Last item'),
-            )
+            ),
           ],
           scrollDirection: Axis.vertical,
-          onReorder: (int oldIndex, int newIndex) {},
+          onReorder: (int oldIndex, int newIndex) { },
         );
         await tester.pumpWidget(MaterialApp(
           home: SizedBox(
@@ -186,10 +186,10 @@ void main() {
 
       testWidgets('Preserves children states when the list parent changes the order', (WidgetTester tester) async {
         _StatefulState findState(Key key) {
-          return find.byElementPredicate((Element element) => element.ancestorWidgetOfExactType(_Stateful)?.key == key)
+          return find.byElementPredicate((Element element) => element.findAncestorWidgetOfExactType<_Stateful>()?.key == key)
               .evaluate()
               .first
-              .ancestorStateOfType(const TypeMatcher<_StatefulState>());
+              .findAncestorStateOfType<_StatefulState>();
         }
         await tester.pumpWidget(MaterialApp(
           home: ReorderableListView(
@@ -198,7 +198,7 @@ void main() {
               _Stateful(key: const Key('B')),
               _Stateful(key: const Key('C')),
             ],
-            onReorder: (int oldIndex, int newIndex) {},
+            onReorder: (int oldIndex, int newIndex) { },
           ),
         ));
         await tester.tap(find.byKey(const Key('A')));
@@ -215,7 +215,7 @@ void main() {
               _Stateful(key: const Key('C')),
               _Stateful(key: const Key('A')),
             ],
-            onReorder: (int oldIndex, int newIndex) {},
+            onReorder: (int oldIndex, int newIndex) { },
           ),
         ));
         // Only the 'A' widget should be checked.
@@ -232,7 +232,7 @@ void main() {
             SizedBox(width: 100.0, height: 100.0, child: Text('B'), key: Key('B')),
             SizedBox(width: 100.0, height: 100.0, child: Text('A'), key: Key('A')),
           ],
-          onReorder: (int oldIndex, int newIndex) {},
+          onReorder: (int oldIndex, int newIndex) { },
         );
 
         Widget buildWithScrollController(ScrollController controller) {
@@ -263,6 +263,65 @@ void main() {
         expect(scrollView.controller, primary2);
       });
 
+      testWidgets('Test custom ScrollController behavior when set', (WidgetTester tester) async {
+        const Key firstBox = Key('C');
+        const Key secondBox = Key('B');
+        const Key thirdBox = Key('A');
+        final ScrollController customController = ScrollController();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 200,
+                child: ReorderableListView(
+                  scrollController: customController,
+                  onReorder: (int oldIndex, int newIndex) { },
+                  children: const <Widget>[
+                    SizedBox(width: 100.0, height: 100.0, child: Text('C'), key: firstBox),
+                    SizedBox(width: 100.0, height: 100.0, child: Text('B'), key: secondBox),
+                    SizedBox(width: 100.0, height: 100.0, child: Text('A'), key: thirdBox),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+
+        // Check initial scroll offset of first list item relative to
+        // the offset of the list view.
+        customController.animateTo(
+          40.0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.linear
+        );
+        await tester.pumpAndSettle();
+        Offset listViewTopLeft = tester.getTopLeft(
+          find.byType(ReorderableListView),
+        );
+        Offset firstBoxTopLeft = tester.getTopLeft(
+          find.byKey(firstBox)
+        );
+        expect(firstBoxTopLeft.dy, listViewTopLeft.dy - 40.0);
+
+        // Drag the UI to see if the scroll controller updates accordingly
+        await tester.drag(
+          find.text('B'),
+          const Offset(0.0, -100.0),
+        );
+        listViewTopLeft = tester.getTopLeft(
+          find.byType(ReorderableListView),
+        );
+        firstBoxTopLeft = tester.getTopLeft(
+          find.byKey(firstBox),
+        );
+        // Initial scroll controller offset: 40.0
+        // Drag UI by 100.0 upwards vertically
+        // First 20.0 px always ignored, so scroll offset is only
+        // shifted by 80.0.
+        // Final offset: 40.0 + 80.0 = 120.0
+        expect(customController.offset, 120.0);
+      });
+
       testWidgets('Still builds when no PrimaryScrollController is available', (WidgetTester tester) async {
         final Widget reorderableList = ReorderableListView(
           children: const <Widget>[
@@ -270,7 +329,7 @@ void main() {
             SizedBox(width: 100.0, height: 100.0, child: Text('B'), key: Key('B')),
             SizedBox(width: 100.0, height: 100.0, child: Text('A'), key: Key('A')),
           ],
-          onReorder: (int oldIndex, int newIndex) {},
+          onReorder: (int oldIndex, int newIndex) { },
         );
         final Widget boilerplate = Localizations(
           locale: const Locale('en'),
@@ -304,7 +363,7 @@ void main() {
           final Semantics semantics = find.ancestor(
             of: find.byKey(Key(listItems[index])),
             matching: find.byType(Semantics),
-          ).evaluate().first.widget;
+          ).evaluate().first.widget as Semantics;
           return semantics.properties.customSemanticsActions;
         }
 
@@ -316,7 +375,7 @@ void main() {
         testWidgets('Provides the correct accessibility actions in LTR and RTL modes', (WidgetTester tester) async {
           // The a11y actions for a vertical list are the same in LTR and RTL modes.
           final SemanticsHandle handle = tester.ensureSemantics();
-          for (TextDirection direction in TextDirection.values) {
+          for (final TextDirection direction in TextDirection.values) {
             await tester.pumpWidget(build());
 
             // The first item can be moved down or to the end.
@@ -441,7 +500,7 @@ void main() {
                   child: SwitchListTile(
                     title: const Text('Switch tile'),
                     value: true,
-                    onChanged: (bool newValue) {},
+                    onChanged: (bool newValue) { },
                   ),
                 ),
               ),
@@ -452,7 +511,7 @@ void main() {
               ),
             ],
             scrollDirection: Axis.vertical,
-            onReorder: (int oldIndex, int newIndex) {},
+            onReorder: (int oldIndex, int newIndex) { },
           );
           await tester.pumpWidget(MaterialApp(
             home: SizedBox(
@@ -469,6 +528,7 @@ void main() {
             hasToggledState: true,
             isToggled: true,
             isEnabled: true,
+            isFocusable: true,
             hasEnabledState: true,
             label: 'Switch tile',
             hasTapAction: true,
@@ -557,10 +617,10 @@ void main() {
               key: Key('Last item'),
               width: itemHeight,
               child: Text('Last item'),
-            )
+            ),
           ],
           scrollDirection: Axis.horizontal,
-          onReorder: (int oldIndex, int newIndex) {},
+          onReorder: (int oldIndex, int newIndex) { },
         );
         await tester.pumpWidget(MaterialApp(
           home: SizedBox(
@@ -615,10 +675,10 @@ void main() {
 
       testWidgets('Preserves children states when the list parent changes the order', (WidgetTester tester) async {
         _StatefulState findState(Key key) {
-          return find.byElementPredicate((Element element) => element.ancestorWidgetOfExactType(_Stateful)?.key == key)
+          return find.byElementPredicate((Element element) => element.findAncestorWidgetOfExactType<_Stateful>()?.key == key)
               .evaluate()
               .first
-              .ancestorStateOfType(const TypeMatcher<_StatefulState>());
+              .findAncestorStateOfType<_StatefulState>();
         }
         await tester.pumpWidget(MaterialApp(
           home: ReorderableListView(
@@ -627,7 +687,7 @@ void main() {
               _Stateful(key: const Key('B')),
               _Stateful(key: const Key('C')),
             ],
-            onReorder: (int oldIndex, int newIndex) {},
+            onReorder: (int oldIndex, int newIndex) { },
             scrollDirection: Axis.horizontal,
           ),
         ));
@@ -645,7 +705,7 @@ void main() {
               _Stateful(key: const Key('C')),
               _Stateful(key: const Key('A')),
             ],
-            onReorder: (int oldIndex, int newIndex) {},
+            onReorder: (int oldIndex, int newIndex) { },
             scrollDirection: Axis.horizontal,
           ),
         ));
@@ -660,7 +720,7 @@ void main() {
           final Semantics semantics = find.ancestor(
             of: find.byKey(Key(listItems[index])),
             matching: find.byType(Semantics),
-          ).evaluate().first.widget;
+          ).evaluate().first.widget as Semantics;
           return semantics.properties.customSemanticsActions;
         }
 
@@ -900,6 +960,30 @@ void main() {
 
     });
 
+    testWidgets('ReorderableListView can be reversed', (WidgetTester tester) async {
+      final Widget reorderableListView = ReorderableListView(
+        children: const <Widget>[
+          SizedBox(
+            key: Key('A'),
+            child: Text('A'),
+          ),
+          SizedBox(
+            key: Key('B'),
+            child: Text('B'),
+          ),
+          SizedBox(
+            key: Key('C'),
+            child: Text('C'),
+          ),
+        ],
+        reverse: true,
+        onReorder: (int oldIndex, int newIndex) { },
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: reorderableListView,
+      ));
+      expect(tester.getCenter(find.text('A')).dy, lessThan(tester.getCenter(find.text('B')).dy));
+    });
     // TODO(djshuckerow): figure out how to write a test for scrolling the list.
   });
 }

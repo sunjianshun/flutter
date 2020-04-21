@@ -1,9 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:ui' show window;
 
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
@@ -26,6 +28,15 @@ RenderBox getMaterialBox(WidgetTester tester) {
   );
 }
 
+Material getMaterial(WidgetTester tester) {
+  return tester.widget<Material>(
+    find.descendant(
+      of: find.byType(RawChip),
+      matching: find.byType(Material),
+    ),
+  );
+}
+
 IconThemeData getIconData(WidgetTester tester) {
   final IconTheme iconTheme = tester.firstWidget(
     find.descendant(
@@ -38,12 +49,10 @@ IconThemeData getIconData(WidgetTester tester) {
 
 DefaultTextStyle getLabelStyle(WidgetTester tester) {
   return tester.widget(
-    find
-        .descendant(
+    find.descendant(
       of: find.byType(RawChip),
       matching: find.byType(DefaultTextStyle),
-    )
-        .last,
+    ).last,
   );
 }
 
@@ -55,18 +64,20 @@ dynamic getRenderChip(WidgetTester tester) {
   return element.renderObject;
 }
 
-double getSelectProgress(WidgetTester tester) => getRenderChip(tester)?.checkmarkAnimation?.value;
-double getAvatarDrawerProgress(WidgetTester tester) => getRenderChip(tester)?.avatarDrawerAnimation?.value;
-double getDeleteDrawerProgress(WidgetTester tester) => getRenderChip(tester)?.deleteDrawerAnimation?.value;
-double getEnableProgress(WidgetTester tester) => getRenderChip(tester)?.enableAnimation?.value;
+double getSelectProgress(WidgetTester tester) => getRenderChip(tester)?.checkmarkAnimation?.value as double;
+double getAvatarDrawerProgress(WidgetTester tester) => getRenderChip(tester)?.avatarDrawerAnimation?.value as double;
+double getDeleteDrawerProgress(WidgetTester tester) => getRenderChip(tester)?.deleteDrawerAnimation?.value as double;
+double getEnableProgress(WidgetTester tester) => getRenderChip(tester)?.enableAnimation?.value as double;
 
 /// Adds the basic requirements for a Chip.
 Widget _wrapForChip({
   Widget child,
   TextDirection textDirection = TextDirection.ltr,
   double textScaleFactor = 1.0,
+  Brightness brightness = Brightness.light,
 }) {
   return MaterialApp(
+    theme: ThemeData(brightness: brightness),
     home: Directionality(
       textDirection: textDirection,
       child: MediaQuery(
@@ -121,6 +132,133 @@ Future<void> _testConstrainedLabel(
   expect(chipSize.height, chipParentHeight);
 }
 
+Widget _selectedInputChip({ Color checkmarkColor }) {
+  return InputChip(
+    label: const Text('InputChip'),
+    selected: true,
+    showCheckmark: true,
+    checkmarkColor: checkmarkColor,
+  );
+}
+
+Widget _selectedFilterChip({ Color checkmarkColor }) {
+  return FilterChip(
+    label: const Text('InputChip'),
+    selected: true,
+    showCheckmark: true,
+    checkmarkColor: checkmarkColor,
+    onSelected: (bool _) { },
+  );
+}
+
+Future<void> _pumpCheckmarkChip(
+  WidgetTester tester, {
+  @required Widget chip,
+  Color themeColor,
+  Brightness brightness = Brightness.light,
+}) async {
+  await tester.pumpWidget(
+    _wrapForChip(
+      brightness: brightness,
+      child: Builder(
+        builder: (BuildContext context) {
+          final ChipThemeData chipTheme = ChipTheme.of(context);
+          return ChipTheme(
+            data: themeColor == null ? chipTheme : chipTheme.copyWith(
+              checkmarkColor: themeColor,
+            ),
+            child: chip,
+          );
+        },
+      ),
+    ),
+  );
+}
+
+void _expectCheckmarkColor(Finder finder, Color color) {
+  expect(
+    finder,
+    paints
+      // The first path that is painted is the selection overlay. We do not care
+      // how it is painted but it has to be added it to this pattern so that the
+      // check mark can be checked next.
+      ..path()
+      // The second path that is painted is the check mark.
+      ..path(color: color),
+  );
+}
+
+Widget _chipWithOptionalDeleteButton({
+  UniqueKey deleteButtonKey,
+  UniqueKey labelKey,
+  bool deletable,
+  TextDirection textDirection = TextDirection.ltr,
+}){
+  return _wrapForChip(
+    textDirection: textDirection,
+    child: Wrap(
+      children: <Widget>[
+        RawChip(
+          onPressed: () {},
+          onDeleted: deletable ? () {} : null,
+          deleteIcon: Icon(Icons.close, key: deleteButtonKey),
+          label: Text(
+            deletable
+              ? 'Chip with Delete Button'
+              : 'Chip without Delete Button',
+            key: labelKey,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+bool offsetsAreClose(Offset a, Offset b) => (a - b).distance < 1.0;
+bool radiiAreClose(double a, double b) => (a - b).abs() < 1.0;
+
+// Ripple pattern matches if there exists at least one ripple
+// with the [expectedCenter] and [expectedRadius].
+// This ensures the existence of a ripple.
+PaintPattern ripplePattern(Offset expectedCenter, double expectedRadius) {
+  return paints
+    ..something((Symbol method, List<dynamic> arguments) {
+        if (method != #drawCircle)
+          return false;
+        final Offset center = arguments[0] as Offset;
+        final double radius = arguments[1] as double;
+        return offsetsAreClose(center, expectedCenter) && radiiAreClose(radius, expectedRadius);
+      }
+    );
+}
+
+// Unique ripple pattern matches if there does not exist ripples
+// other than ones with the [expectedCenter] and [expectedRadius].
+// This ensures the nonexistence of two different ripples.
+PaintPattern uniqueRipplePattern(Offset expectedCenter, double expectedRadius) {
+  return paints
+    ..everything((Symbol method, List<dynamic> arguments) {
+        if (method != #drawCircle)
+          return true;
+        final Offset center = arguments[0] as Offset;
+        final double radius = arguments[1] as double;
+        if (offsetsAreClose(center, expectedCenter) && radiiAreClose(radius, expectedRadius))
+          return true;
+        throw '''
+              Expected: center == $expectedCenter, radius == $expectedRadius
+              Found: center == $center radius == $radius''';
+      }
+    );
+}
+
+// Finds any container of a tooltip.
+Finder findTooltipContainer(String tooltipText) {
+  return find.ancestor(
+    of: find.text(tooltipText),
+    matching: find.byType(Container),
+  );
+}
+
 void main() {
   testWidgets('Chip control test', (WidgetTester tester) async {
     final FeedbackTester feedback = FeedbackTester();
@@ -172,72 +310,157 @@ void main() {
   });
 
   testWidgets(
-      'Chip does not constrain size of label widget if it does not exceed '
-      'the available space', (WidgetTester tester) async {
-    const double labelWidth = 50.0;
-    const double labelHeight = 30.0;
-    final Key labelKey = UniqueKey();
+    'Chip does not constrain size of label widget if it does not exceed '
+    'the available space',
+    (WidgetTester tester) async {
+      const double labelWidth = 50.0;
+      const double labelHeight = 30.0;
+      final Key labelKey = UniqueKey();
 
-    await tester.pumpWidget(
-      _wrapForChip(
-        child: Center(
-          child: Container(
-            width: 500.0,
-            height: 500.0,
-            child: Column(
-              children: <Widget>[
-                Chip(
-                  label: Container(
-                    key: labelKey,
-                    width: labelWidth,
-                    height: labelHeight,
+      await tester.pumpWidget(
+        _wrapForChip(
+          child: Center(
+            child: Container(
+              width: 500.0,
+              height: 500.0,
+              child: Column(
+                children: <Widget>[
+                  Chip(
+                    label: Container(
+                      key: labelKey,
+                      width: labelWidth,
+                      height: labelHeight,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final Size labelSize = tester.getSize(find.byKey(labelKey));
-    expect(labelSize.width, labelWidth);
-    expect(labelSize.height, labelHeight);
-  });
-
-  testWidgets(
-      'Chip constrains the size of the label widget when it exceeds the '
-      'available space', (WidgetTester tester) async {
-    await _testConstrainedLabel(tester);
-  });
+      final Size labelSize = tester.getSize(find.byKey(labelKey));
+      expect(labelSize.width, labelWidth);
+      expect(labelSize.height, labelHeight);
+    },
+  );
 
   testWidgets(
-      'Chip constrains the size of the label widget when it exceeds the '
-      'available space and the avatar is present', (WidgetTester tester) async {
-    await _testConstrainedLabel(
-      tester,
-      avatar: const CircleAvatar(child: Text('A')),
-    );
-  });
+    'Chip constrains the size of the label widget when it exceeds the '
+    'available space',
+    (WidgetTester tester) async {
+      await _testConstrainedLabel(tester);
+    },
+  );
 
   testWidgets(
-      'Chip constrains the size of the label widget when it exceeds the '
-      'available space and the delete icon is present', (WidgetTester tester) async {
-    await _testConstrainedLabel(
-      tester,
-      onDeleted: () {},
-    );
-  });
+    'Chip constrains the size of the label widget when it exceeds the '
+    'available space and the avatar is present',
+    (WidgetTester tester) async {
+      await _testConstrainedLabel(
+        tester,
+        avatar: const CircleAvatar(child: Text('A')),
+      );
+    },
+  );
 
   testWidgets(
-      'Chip constrains the size of the label widget when it exceeds the '
-      'available space and both avatar and delete icons are present', (WidgetTester tester) async {
-    await _testConstrainedLabel(
-      tester,
-      avatar: const CircleAvatar(child: Text('A')),
-      onDeleted: () {},
-    );
-  });
+    'Chip constrains the size of the label widget when it exceeds the '
+    'available space and the delete icon is present',
+    (WidgetTester tester) async {
+      await _testConstrainedLabel(
+        tester,
+        onDeleted: () { },
+      );
+    },
+  );
+
+  testWidgets(
+    'Chip constrains the size of the label widget when it exceeds the '
+    'available space and both avatar and delete icons are present',
+    (WidgetTester tester) async {
+      await _testConstrainedLabel(
+        tester,
+        avatar: const CircleAvatar(child: Text('A')),
+        onDeleted: () { },
+      );
+    },
+  );
+
+  testWidgets(
+    'Chip constrains the avatar, label, and delete icons to the bounds of '
+    'the chip when it exceeds the available space',
+    (WidgetTester tester) async {
+      // Regression test for https://github.com/flutter/flutter/issues/11523
+      Widget chipBuilder (String text, {Widget avatar, VoidCallback onDeleted}) {
+        return MaterialApp(
+          home: Scaffold(
+            body: Container(
+              width: 150,
+              child: Column(
+                children: <Widget>[
+                  Chip(
+                    avatar: avatar,
+                    label: Text(text),
+                    onDeleted: onDeleted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      void chipRectContains(Rect chipRect, Rect rect) {
+        expect(chipRect.contains(rect.topLeft), true);
+        expect(chipRect.contains(rect.topRight), true);
+        expect(chipRect.contains(rect.bottomLeft), true);
+        expect(chipRect.contains(rect.bottomRight), true);
+      }
+
+      Rect chipRect;
+      Rect avatarRect;
+      Rect labelRect;
+      Rect deleteIconRect;
+      const String text = 'Very long text that will be clipped';
+
+      await tester.pumpWidget(chipBuilder(text));
+
+      chipRect = tester.getRect(find.byType(Chip));
+      labelRect = tester.getRect(find.text(text));
+      chipRectContains(chipRect, labelRect);
+
+      await tester.pumpWidget(chipBuilder(
+        text,
+        avatar: const CircleAvatar(child: Text('A')),
+      ));
+      await tester.pumpAndSettle();
+
+      chipRect = tester.getRect(find.byType(Chip));
+      avatarRect = tester.getRect(find.byType(CircleAvatar));
+      chipRectContains(chipRect, avatarRect);
+
+      labelRect = tester.getRect(find.text(text));
+      chipRectContains(chipRect, labelRect);
+
+      await tester.pumpWidget(chipBuilder(
+        text,
+        avatar: const CircleAvatar(child: Text('A')),
+        onDeleted: () {},
+      ));
+      await tester.pumpAndSettle();
+
+      chipRect = tester.getRect(find.byType(Chip));
+      avatarRect = tester.getRect(find.byType(CircleAvatar));
+      chipRectContains(chipRect, avatarRect);
+
+      labelRect = tester.getRect(find.text(text));
+      chipRectContains(chipRect, labelRect);
+
+      deleteIconRect = tester.getRect(find.byIcon(Icons.cancel));
+      chipRectContains(chipRect, deleteIconRect);
+    },
+  );
 
   testWidgets('Chip in row works ok', (WidgetTester tester) async {
     const TextStyle style = TextStyle(fontFamily: 'Ahem', fontSize: 10.0);
@@ -251,7 +474,7 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byType(Text)), const Size(40.0, 10.0));
-    expect(tester.getSize(find.byType(Chip)), const Size(64.0,48.0));
+    expect(tester.getSize(find.byType(Chip)), const Size(64.0, 48.0));
     await tester.pumpWidget(
       _wrapForChip(
         child: Row(
@@ -274,7 +497,7 @@ void main() {
     );
     expect(tester.getSize(find.byType(Text)), const Size(40.0, 10.0));
     expect(tester.getSize(find.byType(Chip)), const Size(800.0, 48.0));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Chip elements are ordered horizontally for locale', (WidgetTester tester) async {
     final UniqueKey iconKey = UniqueKey();
@@ -285,7 +508,7 @@ void main() {
             return Material(
               child: Chip(
                 deleteIcon: Icon(Icons.delete, key: iconKey),
-                onDeleted: () {},
+                onDeleted: () { },
                 label: const Text('ABC'),
               ),
             );
@@ -395,7 +618,7 @@ void main() {
     expect(tester.getSize(find.byType(Chip).first).width, anyOf(318.0, 319.0));
     expect(tester.getSize(find.byType(Chip).first).height, equals(50.0));
     expect(tester.getSize(find.byType(Chip).last), anyOf(const Size(132.0, 48.0), const Size(131.0, 48.0)));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Labels can be non-text widgets', (WidgetTester tester) async {
     final Key keyA = GlobalKey();
@@ -429,7 +652,7 @@ void main() {
       anyOf(const Size(132.0, 48.0), const Size(131.0, 48.0)),
     );
     expect(tester.getSize(find.byType(Chip).last), const Size(58.0, 48.0));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Avatars can be non-circle avatar widgets', (WidgetTester tester) async {
     final Key keyA = GlobalKey();
@@ -458,7 +681,7 @@ void main() {
             Chip(
               deleteIcon: Container(key: keyA, width: 20.0, height: 20.0),
               label: const Text('Chip A'),
-              onDeleted: () {},
+              onDeleted: () { },
             ),
           ],
         ),
@@ -487,7 +710,7 @@ void main() {
                         width: 40.0,
                         height: 40.0,
                       ),
-                      onDeleted: () {},
+                      onDeleted: () { },
                     ),
                   ),
                 );
@@ -524,7 +747,7 @@ void main() {
                         width: 40.0,
                         height: 40.0,
                       ),
-                      onDeleted: () {},
+                      onDeleted: () { },
                     ),
                   ),
                 );
@@ -545,7 +768,7 @@ void main() {
 
   testWidgets('Avatar drawer works as expected on RawChip', (WidgetTester tester) async {
     final GlobalKey labelKey = GlobalKey();
-    Future<void> pushChip({Widget avatar}) async {
+    Future<void> pushChip({ Widget avatar }) async {
       return tester.pumpWidget(
         _wrapForChip(
           child: Wrap(
@@ -653,13 +876,13 @@ void main() {
     expect(tester.getSize(find.byType(RawChip)), equals(const Size(80.0, 48.0)));
     expect(tester.getTopLeft(find.byKey(labelKey)), equals(const Offset(12.0, 17.0)));
     expect(find.byKey(avatarKey), findsNothing);
-  });
+  }, skip: isBrowser);
 
   testWidgets('Delete button drawer works as expected on RawChip', (WidgetTester tester) async {
     final UniqueKey labelKey = UniqueKey();
     final UniqueKey deleteButtonKey = UniqueKey();
     bool wasDeleted = false;
-    Future<void> pushChip({bool deletable = false}) async {
+    Future<void> pushChip({ bool deletable = false }) async {
       return tester.pumpWidget(
         _wrapForChip(
           child: Wrap(
@@ -667,12 +890,12 @@ void main() {
               StatefulBuilder(builder: (BuildContext context, StateSetter setState) {
                 return RawChip(
                   onDeleted: deletable
-                      ? () {
-                          setState(() {
-                            wasDeleted = true;
-                          });
-                        }
-                      : null,
+                    ? () {
+                        setState(() {
+                          wasDeleted = true;
+                        });
+                      }
+                    : null,
                   deleteIcon: Container(width: 40.0, height: 40.0, key: deleteButtonKey),
                   label: Text('Chip', key: labelKey),
                   shape: const StadiumBorder(),
@@ -769,12 +992,208 @@ void main() {
     expect(tester.getSize(find.byType(RawChip)), equals(const Size(80.0, 48.0)));
     expect(tester.getTopLeft(find.byKey(labelKey)), equals(const Offset(12.0, 17.0)));
     expect(find.byKey(deleteButtonKey), findsNothing);
-  });
+  }, skip: isBrowser);
+
+  testWidgets('Chip creates centered, unique ripple when label is tapped', (WidgetTester tester) async {
+    // Creates a chip with a delete button.
+    final UniqueKey labelKey = UniqueKey();
+    final UniqueKey deleteButtonKey = UniqueKey();
+
+    await tester.pumpWidget(
+      _chipWithOptionalDeleteButton(
+        labelKey: labelKey,
+        deleteButtonKey: deleteButtonKey,
+        deletable: true,
+      ),
+    );
+
+    final RenderBox box = getMaterialBox(tester);
+
+    // Taps at a location close to the center of the label.
+    final Offset centerOfLabel = tester.getCenter(find.byKey(labelKey));
+    final Offset tapLocationOfLabel = centerOfLabel + const Offset(-10, -10);
+    final TestGesture gesture = await tester.startGesture(tapLocationOfLabel);
+    await tester.pump();
+
+    // Waits for 100 ms.
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // There should be exactly one ink-creating widget.
+    expect(find.byType(InkWell), findsOneWidget);
+    expect(find.byType(InkResponse), findsNothing);
+
+    // There should be one unique, centered ink ripple.
+    expect(box, ripplePattern(const Offset(163.0, 6.0), 20.9));
+    expect(box, uniqueRipplePattern(const Offset(163.0, 6.0), 20.9));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for 100 ms again.
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // The ripple should grow, with the same center.
+    expect(box, ripplePattern(const Offset(163.0, 6.0), 41.8));
+    expect(box, uniqueRipplePattern(const Offset(163.0, 6.0), 41.8));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for a very long time.
+    await tester.pumpAndSettle();
+
+    // There should still be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    await gesture.up();
+  }, skip: isBrowser);
+
+  testWidgets('Delete button creates non-centered, unique ripple when tapped', (WidgetTester tester) async {
+    // Creates a chip with a delete button.
+    final UniqueKey labelKey = UniqueKey();
+    final UniqueKey deleteButtonKey = UniqueKey();
+
+    await tester.pumpWidget(
+      _chipWithOptionalDeleteButton(
+        labelKey: labelKey,
+        deleteButtonKey: deleteButtonKey,
+        deletable: true,
+      ),
+    );
+
+    final RenderBox box = getMaterialBox(tester);
+
+    // Taps at a location close to the center of the delete icon.
+    final Offset centerOfDeleteButton = tester.getCenter(find.byKey(deleteButtonKey));
+    final Offset tapLocationOfDeleteButton = centerOfDeleteButton + const Offset(-10, -10);
+    final TestGesture gesture = await tester.startGesture(tapLocationOfDeleteButton);
+    await tester.pump();
+
+    // Waits for 200 ms.
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // There should be exactly one ink-creating widget.
+    expect(find.byType(InkWell), findsOneWidget);
+    expect(find.byType(InkResponse), findsNothing);
+
+    // There should be one unique ink ripple.
+    expect(box, ripplePattern(const Offset(3.0, 3.0), 3.5));
+    expect(box, uniqueRipplePattern(const Offset(3.0, 3.0), 3.5));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for 200 ms again.
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // The ripple should grow, but the center should move,
+    // Towards the center of the delete icon.
+    expect(box, ripplePattern(const Offset(5.0, 5.0), 10.5));
+    expect(box, uniqueRipplePattern(const Offset(5.0, 5.0), 10.5));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for a very long time.
+    // This is pressing and holding the delete button.
+    await tester.pumpAndSettle();
+
+    // There should be a tooltip.
+    expect(findTooltipContainer('Delete'), findsOneWidget);
+
+    await gesture.up();
+  }, skip: isBrowser);
+
+  testWidgets('RTL delete button responds to tap on the left of the chip', (WidgetTester tester) async {
+    // Creates an RTL chip with a delete button.
+    final UniqueKey labelKey = UniqueKey();
+    final UniqueKey deleteButtonKey = UniqueKey();
+
+    await tester.pumpWidget(
+      _chipWithOptionalDeleteButton(
+        labelKey: labelKey,
+        deleteButtonKey: deleteButtonKey,
+        deletable: true,
+        textDirection: TextDirection.rtl,
+      ),
+    );
+
+    // Taps at a location close to the center of the delete icon,
+    // Which is on the left side of the chip.
+    final Offset topLeftOfInkWell = tester.getTopLeft(find.byType(InkWell));
+    final Offset tapLocation = topLeftOfInkWell + const Offset(8, 8);
+    final TestGesture gesture = await tester.startGesture(tapLocation);
+    await tester.pump();
+
+    await tester.pumpAndSettle();
+
+    // The existence of a 'Delete' tooltip indicates the delete icon is tapped,
+    // Instead of the label.
+    expect(findTooltipContainer('Delete'), findsOneWidget);
+
+    await gesture.up();
+  }, skip: isBrowser);
+
+  testWidgets('Chip without delete button creates correct ripple', (WidgetTester tester) async {
+    // Creates a chip with a delete button.
+    final UniqueKey labelKey = UniqueKey();
+
+    await tester.pumpWidget(
+      _chipWithOptionalDeleteButton(
+        labelKey: labelKey,
+        deletable: false,
+      ),
+    );
+
+    final RenderBox box = getMaterialBox(tester);
+
+    // Taps at a location close to the bottom-right corner of the chip.
+    final Offset bottomRightOfInkWell = tester.getBottomRight(find.byType(InkWell));
+    final Offset tapLocation = bottomRightOfInkWell + const Offset(-10, -10);
+    final TestGesture gesture = await tester.startGesture(tapLocation);
+    await tester.pump();
+
+    // Waits for 100 ms.
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // There should be exactly one ink-creating widget.
+    expect(find.byType(InkWell), findsOneWidget);
+    expect(find.byType(InkResponse), findsNothing);
+
+    // There should be one unique, centered ink ripple.
+    expect(box, ripplePattern(const Offset(378.0, 22.0), 37.9));
+    expect(box, uniqueRipplePattern(const Offset(378.0, 22.0), 37.9));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for 100 ms again.
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // The ripple should grow, with the same center.
+    // This indicates that the tap is not on a delete icon.
+    expect(box, ripplePattern(const Offset(378.0, 22.0), 75.8));
+    expect(box, uniqueRipplePattern(const Offset(378.0, 22.0), 75.8));
+
+    // There should be no tooltip.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    // Waits for a very long time.
+    await tester.pumpAndSettle();
+
+    // There should still be no tooltip.
+    // This indicates that the tap is not on a delete icon.
+    expect(findTooltipContainer('Delete'), findsNothing);
+
+    await gesture.up();
+  }, skip: isBrowser);
 
   testWidgets('Selection with avatar works as expected on RawChip', (WidgetTester tester) async {
     bool selected = false;
     final UniqueKey labelKey = UniqueKey();
-    Future<void> pushChip({Widget avatar, bool selectable = false}) async {
+    Future<void> pushChip({ Widget avatar, bool selectable = false }) async {
       return tester.pumpWidget(
         _wrapForChip(
           child: Wrap(
@@ -783,12 +1202,12 @@ void main() {
                 return RawChip(
                   avatar: avatar,
                   onSelected: selectable != null
-                      ? (bool value) {
-                          setState(() {
-                            selected = value;
-                          });
-                        }
-                      : null,
+                    ? (bool value) {
+                        setState(() {
+                          selected = value;
+                        });
+                      }
+                    : null,
                   selected: selected,
                   label: Text('Chip', key: labelKey),
                   shape: const StadiumBorder(),
@@ -852,12 +1271,12 @@ void main() {
     expect(getSelectProgress(tester), equals(0.0));
     expect(getAvatarDrawerProgress(tester), equals(1.0));
     expect(getDeleteDrawerProgress(tester), equals(0.0));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Selection without avatar works as expected on RawChip', (WidgetTester tester) async {
     bool selected = false;
     final UniqueKey labelKey = UniqueKey();
-    Future<void> pushChip({bool selectable = false}) async {
+    Future<void> pushChip({ bool selectable = false }) async {
       return tester.pumpWidget(
         _wrapForChip(
           child: Wrap(
@@ -865,12 +1284,12 @@ void main() {
               StatefulBuilder(builder: (BuildContext context, StateSetter setState) {
                 return RawChip(
                   onSelected: selectable != null
-                      ? (bool value) {
-                          setState(() {
-                            selected = value;
-                          });
-                        }
-                      : null,
+                    ? (bool value) {
+                        setState(() {
+                          selected = value;
+                        });
+                      }
+                    : null,
                   selected: selected,
                   label: Text('Chip', key: labelKey),
                   shape: const StadiumBorder(),
@@ -928,12 +1347,12 @@ void main() {
     expect(getSelectProgress(tester), equals(0.0));
     expect(getAvatarDrawerProgress(tester), equals(0.0));
     expect(getDeleteDrawerProgress(tester), equals(0.0));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Activation works as expected on RawChip', (WidgetTester tester) async {
     bool selected = false;
     final UniqueKey labelKey = UniqueKey();
-    Future<void> pushChip({Widget avatar, bool selectable = false}) async {
+    Future<void> pushChip({ Widget avatar, bool selectable = false }) async {
       return tester.pumpWidget(
         _wrapForChip(
           child: Wrap(
@@ -942,12 +1361,12 @@ void main() {
                 return RawChip(
                   avatar: avatar,
                   onSelected: selectable != null
-                      ? (bool value) {
-                          setState(() {
-                            selected = value;
-                          });
-                        }
-                      : null,
+                    ? (bool value) {
+                        setState(() {
+                          selected = value;
+                        });
+                      }
+                    : null,
                   selected: selected,
                   label: Text('Chip', key: labelKey),
                   shape: const StadiumBorder(),
@@ -1053,7 +1472,7 @@ void main() {
     );
 
     expect(tester.getSize(find.byKey(key2)), const Size(80.0, 32.0));
-  });
+  }, skip: isBrowser);
 
   testWidgets('Chip uses the right theme colors for the right components', (WidgetTester tester) async {
     final ThemeData themeData = ThemeData(
@@ -1080,28 +1499,28 @@ void main() {
             child: StatefulBuilder(builder: (BuildContext context, StateSetter setState) {
               return RawChip(
                 showCheckmark: showCheckmark,
-                onDeleted: isDeletable ? () {} : null,
+                onDeleted: isDeletable ? () { } : null,
                 tapEnabled: true,
                 avatar: avatar,
                 deleteIcon: deleteIcon,
                 isEnabled: isSelectable || isPressable,
                 shape: chipTheme.shape,
-                selected: isSelectable ? value : null,
+                selected: isSelectable && value,
                 label: Text('$value'),
                 onSelected: isSelectable
-                    ? (bool newValue) {
-                        setState(() {
-                          value = newValue;
-                        });
-                      }
-                    : null,
+                  ? (bool newValue) {
+                      setState(() {
+                        value = newValue;
+                      });
+                    }
+                  : null,
                 onPressed: isPressable
-                    ? () {
-                        setState(() {
-                          value = true;
-                        });
-                      }
-                    : null,
+                  ? () {
+                      setState(() {
+                        value = true;
+                      });
+                    }
+                  : null,
               );
             }),
           ),
@@ -1211,6 +1630,50 @@ void main() {
       semanticsTester.dispose();
     });
 
+    testWidgets('delete', (WidgetTester tester) async {
+      final SemanticsTester semanticsTester = SemanticsTester(tester);
+
+      await tester.pumpWidget(MaterialApp(
+        home: Material(
+          child: RawChip(
+            label: const Text('test'),
+            onDeleted: () { },
+          ),
+        ),
+      ));
+
+      expect(semanticsTester, hasSemantics(
+          TestSemantics.root(
+            children: <TestSemantics>[
+              TestSemantics(
+                textDirection: TextDirection.ltr,
+                children: <TestSemantics>[
+                  TestSemantics(
+                    flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
+                    children: <TestSemantics>[
+                      TestSemantics(
+                        label: 'test',
+                        textDirection: TextDirection.ltr,
+                        children: <TestSemantics>[
+                          TestSemantics(
+                            label: 'Delete',
+                            actions: <SemanticsAction>[SemanticsAction.tap],
+                            textDirection: TextDirection.ltr,
+                            flags: <SemanticsFlag>[
+                              SemanticsFlag.isButton,
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ), ignoreTransform: true, ignoreId: true, ignoreRect: true));
+      semanticsTester.dispose();
+    });
+
     testWidgets('with onPressed', (WidgetTester tester) async {
       final SemanticsTester semanticsTester = SemanticsTester(tester);
 
@@ -1218,7 +1681,7 @@ void main() {
         home: Material(
           child: RawChip(
             label: const Text('test'),
-            onPressed: () {},
+            onPressed: () { },
           ),
         ),
       ));
@@ -1238,6 +1701,7 @@ void main() {
                         flags: <SemanticsFlag>[
                           SemanticsFlag.hasEnabledState,
                           SemanticsFlag.isEnabled,
+                          SemanticsFlag.isFocusable,
                         ],
                         actions: <SemanticsAction>[SemanticsAction.tap],
                       ),
@@ -1284,6 +1748,7 @@ void main() {
                         flags: <SemanticsFlag>[
                           SemanticsFlag.hasEnabledState,
                           SemanticsFlag.isEnabled,
+                          SemanticsFlag.isFocusable,
                         ],
                         actions: <SemanticsAction>[SemanticsAction.tap],
                       ),
@@ -1322,9 +1787,10 @@ void main() {
                         label: 'test',
                         textDirection: TextDirection.ltr,
                         flags: <SemanticsFlag>[
-                          SemanticsFlag.isSelected,
                           SemanticsFlag.hasEnabledState,
                           SemanticsFlag.isEnabled,
+                          SemanticsFlag.isFocusable,
+                          SemanticsFlag.isSelected,
                         ],
                         actions: <SemanticsAction>[SemanticsAction.tap],
                       ),
@@ -1345,7 +1811,7 @@ void main() {
         home: Material(
           child: RawChip(
             isEnabled: false,
-            onPressed: () {},
+            onPressed: () { },
             label: const Text('test'),
           ),
         ),
@@ -1436,7 +1902,7 @@ void main() {
       MaterialApp(
         home: Material(
           child: ActionChip(
-            onPressed: (){},
+            onPressed: () { },
             label: const Text('action chip'),
           ),
         ),
@@ -1450,7 +1916,7 @@ void main() {
       MaterialApp(
         home: Material(
           child: FilterChip(
-            onSelected: (bool valueChanged){},
+            onSelected: (bool valueChanged) { },
             selected: false,
             label: const Text('filter chip'),
           ),
@@ -1476,7 +1942,7 @@ void main() {
     expect(tester.takeException(), null);
   });
 
-  testWidgets('Chip elevation works correctly', (WidgetTester tester) async {
+  testWidgets('Chip elevation and shadow color work correctly', (WidgetTester tester) async {
     final ThemeData theme = ThemeData(
       platform: TargetPlatform.android,
       primarySwatch: Colors.red,
@@ -1484,7 +1950,7 @@ void main() {
 
     final ChipThemeData chipTheme = theme.chipTheme;
 
-    InputChip inputChip = const InputChip(label: Text('Label'), pressElevation: 8.0);
+    InputChip inputChip = const InputChip(label: Text('Label'));
 
     Widget buildChip(ChipThemeData data) {
       return _wrapForChip(
@@ -1497,13 +1963,34 @@ void main() {
     }
 
     await tester.pumpWidget(buildChip(chipTheme));
-    expect(inputChip.pressElevation, 8.0);
+    Material material = getMaterial(tester);
+    expect(material.elevation, 0.0);
+    expect(material.shadowColor, Colors.black);
 
-    inputChip = const InputChip(label: Text('Label'), pressElevation: 12.0);
+    inputChip = const InputChip(
+      label: Text('Label'),
+      elevation: 4.0,
+      shadowColor: Colors.green,
+      selectedShadowColor: Colors.blue,
+    );
 
     await tester.pumpWidget(buildChip(chipTheme));
     await tester.pumpAndSettle();
-    expect(inputChip.pressElevation, 12.0);
+    material = getMaterial(tester);
+    expect(material.elevation, 4.0);
+    expect(material.shadowColor, Colors.green);
+
+    inputChip = const InputChip(
+      label: Text('Label'),
+      selected: true,
+      shadowColor: Colors.green,
+      selectedShadowColor: Colors.blue,
+    );
+
+    await tester.pumpWidget(buildChip(chipTheme));
+    await tester.pumpAndSettle();
+    material = getMaterial(tester);
+    expect(material.shadowColor, Colors.blue);
   });
 
   testWidgets('can be tapped outside of chip body', (WidgetTester tester) async {
@@ -1538,7 +2025,7 @@ void main() {
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(0.0))),
           avatar: const CircleAvatar(child: Text('A')),
           label: const Text('Chip A'),
-          onPressed: () {},
+          onPressed: () { },
         ),
       ),
     );
@@ -1553,12 +2040,12 @@ void main() {
   }
 
   testWidgets('Chip clipBehavior properly passes through to the Material', (WidgetTester tester) async {
-     const Text label = Text('label');
-     await tester.pumpWidget(_wrapForChip(child: const Chip(label: label)));
-     checkChipMaterialClipBehavior(tester, Clip.none);
+    const Text label = Text('label');
+    await tester.pumpWidget(_wrapForChip(child: const Chip(label: label)));
+    checkChipMaterialClipBehavior(tester, Clip.none);
 
-     await tester.pumpWidget(_wrapForChip(child: const Chip(label: label, clipBehavior: Clip.antiAlias)));
-     checkChipMaterialClipBehavior(tester, Clip.antiAlias);
+    await tester.pumpWidget(_wrapForChip(child: const Chip(label: label, clipBehavior: Clip.antiAlias)));
+    checkChipMaterialClipBehavior(tester, Clip.antiAlias);
   });
 
   testWidgets('ChoiceChip clipBehavior properly passes through to the Material', (WidgetTester tester) async {
@@ -1572,19 +2059,19 @@ void main() {
 
   testWidgets('FilterChip clipBehavior properly passes through to the Material', (WidgetTester tester) async {
     const Text label = Text('label');
-    await tester.pumpWidget(_wrapForChip(child: FilterChip(label: label, onSelected: (bool b){},)));
+    await tester.pumpWidget(_wrapForChip(child: FilterChip(label: label, onSelected: (bool b) { },)));
     checkChipMaterialClipBehavior(tester, Clip.none);
 
-    await tester.pumpWidget(_wrapForChip(child: FilterChip(label: label, onSelected: (bool b){}, clipBehavior: Clip.antiAlias)));
+    await tester.pumpWidget(_wrapForChip(child: FilterChip(label: label, onSelected: (bool b) { }, clipBehavior: Clip.antiAlias)));
     checkChipMaterialClipBehavior(tester, Clip.antiAlias);
   });
 
   testWidgets('ActionChip clipBehavior properly passes through to the Material', (WidgetTester tester) async {
     const Text label = Text('label');
-    await tester.pumpWidget(_wrapForChip(child: ActionChip(label: label, onPressed: (){},)));
+    await tester.pumpWidget(_wrapForChip(child: ActionChip(label: label, onPressed: () { },)));
     checkChipMaterialClipBehavior(tester, Clip.none);
 
-    await tester.pumpWidget(_wrapForChip(child: ActionChip(label: label, clipBehavior: Clip.antiAlias, onPressed: (){})));
+    await tester.pumpWidget(_wrapForChip(child: ActionChip(label: label, clipBehavior: Clip.antiAlias, onPressed: () { })));
     checkChipMaterialClipBehavior(tester, Clip.antiAlias);
   });
 
@@ -1595,5 +2082,443 @@ void main() {
 
     await tester.pumpWidget(_wrapForChip(child: const InputChip(label: label, clipBehavior: Clip.antiAlias)));
     checkChipMaterialClipBehavior(tester, Clip.antiAlias);
+  });
+
+  testWidgets('selected chip and avatar draw darkened layer within avatar circle', (WidgetTester tester) async {
+    await tester.pumpWidget(_wrapForChip(child: const FilterChip(
+      avatar: CircleAvatar(child: Text('t')),
+      label: Text('test'),
+      selected: true,
+      onSelected: null,
+    )));
+    final RenderBox rawChip = tester.firstRenderObject<RenderBox>(
+      find.descendant(
+        of: find.byType(RawChip),
+        matching: find.byWidgetPredicate((Widget widget) {
+          return widget.runtimeType.toString() == '_ChipRenderWidget';
+        }),
+      ),
+    );
+    const Color selectScrimColor = Color(0x60191919);
+    expect(rawChip, paints..path(color: selectScrimColor, includes: <Offset>[
+      const Offset(10, 10),
+    ], excludes: <Offset>[
+      const Offset(4, 4),
+    ]));
+  }, skip: isBrowser);
+
+  testWidgets('Chips should use InkWell instead of InkResponse.', (WidgetTester tester) async {
+    // Regression test for https://github.com/flutter/flutter/issues/28646
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: ActionChip(
+            onPressed: () { },
+            label: const Text('action chip'),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(InkWell), findsOneWidget);
+  });
+
+  testWidgets('RawChip.selected can not be null', (WidgetTester tester) async {
+    expect(() async {
+      MaterialApp(
+        home: Material(
+          child: RawChip(
+            onPressed: () { },
+            selected: null,
+            label: const Text('Chip'),
+          ),
+        ),
+      );
+    }, throwsAssertionError);
+  });
+
+  testWidgets('Chip uses stateful color for text color in different states', (WidgetTester tester) async {
+    final FocusNode focusNode = FocusNode();
+
+    const Color pressedColor = Color(0x00000001);
+    const Color hoverColor = Color(0x00000002);
+    const Color focusedColor = Color(0x00000003);
+    const Color defaultColor = Color(0x00000004);
+    const Color selectedColor = Color(0x00000005);
+    const Color disabledColor = Color(0x00000006);
+
+    Color getTextColor(Set<MaterialState> states) {
+      if (states.contains(MaterialState.disabled))
+        return disabledColor;
+
+      if (states.contains(MaterialState.pressed))
+        return pressedColor;
+
+      if (states.contains(MaterialState.hovered))
+        return hoverColor;
+
+      if (states.contains(MaterialState.focused))
+        return focusedColor;
+
+      if (states.contains(MaterialState.selected))
+        return selectedColor;
+
+      return defaultColor;
+    }
+
+    Widget chipWidget({ bool enabled = true, bool selected = false }) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Focus(
+            focusNode: focusNode,
+            child: ChoiceChip(
+              label: const Text('Chip'),
+              selected: selected,
+              onSelected: enabled ? (_) {} : null,
+              labelStyle: TextStyle(color: MaterialStateColor.resolveWith(getTextColor)),
+            ),
+          ),
+        ),
+      );
+    }
+    Color textColor() {
+      return tester.renderObject<RenderParagraph>(find.text('Chip')).text.style.color;
+    }
+
+    // Default, not disabled.
+    await tester.pumpWidget(chipWidget());
+    expect(textColor(), equals(defaultColor));
+
+    // Selected.
+    await tester.pumpWidget(chipWidget(selected: true));
+    expect(textColor(), selectedColor);
+
+    // Focused.
+    final FocusNode chipFocusNode = focusNode.children.first;
+    chipFocusNode.requestFocus();
+    await tester.pumpAndSettle();
+    expect(textColor(), focusedColor);
+
+    // Hovered.
+    final Offset center = tester.getCenter(find.byType(ChoiceChip));
+    final TestGesture gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.addPointer();
+    await gesture.moveTo(center);
+    await tester.pumpAndSettle();
+    expect(textColor(), hoverColor);
+
+    // Pressed.
+    await gesture.down(center);
+    await tester.pumpAndSettle();
+    expect(textColor(), pressedColor);
+
+    // Disabled.
+    await tester.pumpWidget(chipWidget(enabled: false));
+    await tester.pumpAndSettle();
+    expect(textColor(), disabledColor);
+
+    // Teardown.
+    await gesture.removePointer();
+  });
+
+  testWidgets('loses focus when disabled', (WidgetTester tester) async {
+    final FocusNode focusNode = FocusNode(debugLabel: 'InputChip');
+    await tester.pumpWidget(
+      _wrapForChip(
+        child: InputChip(
+          focusNode: focusNode,
+          autofocus: true,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(0.0))),
+          avatar: const CircleAvatar(child: Text('A')),
+          label: const Text('Chip A'),
+          onPressed: () { },
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(focusNode.hasPrimaryFocus, isTrue);
+
+    await tester.pumpWidget(
+      _wrapForChip(
+        child: InputChip(
+          focusNode: focusNode,
+          autofocus: true,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(0.0))),
+          avatar: const CircleAvatar(child: Text('A')),
+          label: const Text('Chip A'),
+          onPressed: null,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(focusNode.hasPrimaryFocus, isFalse);
+  });
+
+  testWidgets('cannot be traversed to when disabled', (WidgetTester tester) async {
+    final FocusNode focusNode1 = FocusNode(debugLabel: 'InputChip 1');
+    final FocusNode focusNode2 = FocusNode(debugLabel: 'InputChip 2');
+    await tester.pumpWidget(
+      _wrapForChip(
+        child: Column(
+          children: <Widget>[
+            InputChip(
+              focusNode: focusNode1,
+              autofocus: true,
+              label: const Text('Chip A'),
+              onPressed: () { },
+            ),
+            InputChip(
+              focusNode: focusNode2,
+              autofocus: true,
+              label: const Text('Chip B'),
+              onPressed: null,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(focusNode1.hasPrimaryFocus, isTrue);
+    expect(focusNode2.hasPrimaryFocus, isFalse);
+
+    expect(focusNode1.nextFocus(), isTrue);
+
+    await tester.pump();
+    expect(focusNode1.hasPrimaryFocus, isTrue);
+    expect(focusNode2.hasPrimaryFocus, isFalse);
+  });
+
+  testWidgets('Chip responds to density changes.', (WidgetTester tester) async {
+    const Key key = Key('test');
+    const Key textKey = Key('test text');
+    const Key iconKey = Key('test icon');
+    const Key avatarKey = Key('test avatar');
+    Future<void> buildTest(VisualDensity visualDensity) async {
+      return await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Center(
+              child: Column(
+                children: <Widget>[
+                  InputChip(
+                    visualDensity: visualDensity,
+                    key: key,
+                    onPressed: () {},
+                    onDeleted: () {},
+                    label: const Text('Test', key: textKey),
+                    deleteIcon: const Icon(Icons.delete, key: iconKey),
+                    avatar: const Icon(Icons.play_arrow, key: avatarKey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // The Chips only change in size vertically in response to density, so
+    // horizontal changes aren't expected.
+    await buildTest(VisualDensity.standard);
+    Rect box = tester.getRect(find.byKey(key));
+    Rect textBox = tester.getRect(find.byKey(textKey));
+    Rect iconBox = tester.getRect(find.byKey(iconKey));
+    Rect avatarBox = tester.getRect(find.byKey(avatarKey));
+    expect(box.size, equals(const Size(128, 32.0 + 16.0)));
+    expect(textBox.size, equals(const Size(56, 14)));
+    expect(iconBox.size, equals(const Size(24, 24)));
+    expect(avatarBox.size, equals(const Size(24, 24)));
+    expect(textBox.top, equals(17));
+    expect(box.bottom - textBox.bottom, equals(17));
+    expect(textBox.left, equals(372));
+    expect(box.right - textBox.right, equals(36));
+
+    // Try decreasing density (with higher density numbers).
+    await buildTest(const VisualDensity(horizontal: 3.0, vertical: 3.0));
+    box = tester.getRect(find.byKey(key));
+    textBox = tester.getRect(find.byKey(textKey));
+    iconBox = tester.getRect(find.byKey(iconKey));
+    avatarBox = tester.getRect(find.byKey(avatarKey));
+    expect(box.size, equals(const Size(128, 60)));
+    expect(textBox.size, equals(const Size(56, 14)));
+    expect(iconBox.size, equals(const Size(24, 24)));
+    expect(avatarBox.size, equals(const Size(24, 24)));
+    expect(textBox.top, equals(23));
+    expect(box.bottom - textBox.bottom, equals(23));
+    expect(textBox.left, equals(372));
+    expect(box.right - textBox.right, equals(36));
+
+    // Try increasing density (with lower density numbers).
+    await buildTest(const VisualDensity(horizontal: -3.0, vertical: -3.0));
+    box = tester.getRect(find.byKey(key));
+    textBox = tester.getRect(find.byKey(textKey));
+    iconBox = tester.getRect(find.byKey(iconKey));
+    avatarBox = tester.getRect(find.byKey(avatarKey));
+    expect(box.size, equals(const Size(128, 36)));
+    expect(textBox.size, equals(const Size(56, 14)));
+    expect(iconBox.size, equals(const Size(24, 24)));
+    expect(avatarBox.size, equals(const Size(24, 24)));
+    expect(textBox.top, equals(11));
+    expect(box.bottom - textBox.bottom, equals(11));
+    expect(textBox.left, equals(372));
+    expect(box.right - textBox.right, equals(36));
+
+    // Now test that horizontal and vertical are wired correctly. Negating the
+    // horizontal should have no change over what's above.
+    await buildTest(const VisualDensity(horizontal: 3.0, vertical: -3.0));
+    await tester.pumpAndSettle();
+    box = tester.getRect(find.byKey(key));
+    textBox = tester.getRect(find.byKey(textKey));
+    iconBox = tester.getRect(find.byKey(iconKey));
+    avatarBox = tester.getRect(find.byKey(avatarKey));
+    expect(box.size, equals(const Size(128, 36)));
+    expect(textBox.size, equals(const Size(56, 14)));
+    expect(iconBox.size, equals(const Size(24, 24)));
+    expect(avatarBox.size, equals(const Size(24, 24)));
+    expect(textBox.top, equals(11));
+    expect(box.bottom - textBox.bottom, equals(11));
+    expect(textBox.left, equals(372));
+    expect(box.right - textBox.right, equals(36));
+
+    // Make sure the "Comfortable" setting is the spec'd size
+    await buildTest(VisualDensity.comfortable);
+    await tester.pumpAndSettle();
+    box = tester.getRect(find.byKey(key));
+    expect(box.size, equals(const Size(128, 28.0 + 16.0)));
+
+    // Make sure the "Compact" setting is the spec'd size
+    await buildTest(VisualDensity.compact);
+    await tester.pumpAndSettle();
+    box = tester.getRect(find.byKey(key));
+    expect(box.size, equals(const Size(128, 24.0 + 16.0)));
+  });
+
+  testWidgets('Input chip check mark color is determined by platform brightness when light', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedInputChip(),
+      brightness: Brightness.light,
+    );
+
+    _expectCheckmarkColor(
+      find.byType(InputChip),
+      Colors.black.withAlpha(0xde),
+    );
+  });
+
+  testWidgets('Filter chip check mark color is determined by platform brightness when light', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedFilterChip(),
+      brightness: Brightness.light,
+    );
+
+    _expectCheckmarkColor(
+      find.byType(FilterChip),
+      Colors.black.withAlpha(0xde),
+    );
+  });
+
+  testWidgets('Input chip check mark color is determined by platform brightness when dark', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedInputChip(),
+      brightness: Brightness.dark,
+    );
+
+    _expectCheckmarkColor(
+      find.byType(InputChip),
+      Colors.white.withAlpha(0xde),
+    );
+  });
+
+  testWidgets('Filter chip check mark color is determined by platform brightness when dark', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedFilterChip(),
+      brightness: Brightness.dark,
+    );
+
+    _expectCheckmarkColor(
+      find.byType(FilterChip),
+      Colors.white.withAlpha(0xde),
+    );
+  });
+
+  testWidgets('Input chip check mark color can be set by the chip theme', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedInputChip(),
+      themeColor: const Color(0xff00ff00),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(InputChip),
+      const Color(0xff00ff00),
+    );
+  });
+
+  testWidgets('Filter chip check mark color can be set by the chip theme', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedFilterChip(),
+      themeColor: const Color(0xff00ff00),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(FilterChip),
+      const Color(0xff00ff00),
+    );
+  });
+
+  testWidgets('Input chip check mark color can be set by the chip constructor', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedInputChip(checkmarkColor: const Color(0xff00ff00)),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(InputChip),
+      const Color(0xff00ff00),
+    );
+  });
+
+  testWidgets('Filter chip check mark color can be set by the chip constructor', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedFilterChip(checkmarkColor: const Color(0xff00ff00)),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(FilterChip),
+      const Color(0xff00ff00),
+    );
+  });
+
+  testWidgets('Input chip check mark color is set by chip constructor even when a theme color is specified', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedInputChip(checkmarkColor: const Color(0xffff0000)),
+      themeColor: const Color(0xff00ff00),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(InputChip),
+      const Color(0xffff0000),
+    );
+  });
+
+  testWidgets('Filter chip check mark color is set by chip constructor even when a theme color is specified', (WidgetTester tester) async {
+    await _pumpCheckmarkChip(
+      tester,
+      chip: _selectedFilterChip(checkmarkColor: const Color(0xffff0000)),
+      themeColor: const Color(0xff00ff00),
+    );
+
+    _expectCheckmarkColor(
+      find.byType(FilterChip),
+      const Color(0xffff0000),
+    );
   });
 }

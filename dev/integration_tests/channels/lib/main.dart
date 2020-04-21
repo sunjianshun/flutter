@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class _TestAppState extends State<TestApp> {
     0.0,
     'hello',
     <dynamic>[
-      <String, dynamic>{'key': 42}
+      <String, dynamic>{'key': 42},
     ],
   ];
   static final Map<String, dynamic> aMap = <String, dynamic>{
@@ -40,7 +40,7 @@ class _TestAppState extends State<TestApp> {
     'c': 0.0,
     'd': 'hello',
     'e': <dynamic>[
-      <String, dynamic>{'key': 42}
+      <String, dynamic>{'key': 42},
     ],
   };
   static final Uint8List someUint8s = Uint8List.fromList(<int>[

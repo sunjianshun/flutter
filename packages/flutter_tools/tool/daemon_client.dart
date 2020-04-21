@@ -1,11 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:async';
 import 'dart:convert';
-
 import 'dart:io';
+
+import 'package:flutter_tools/src/base/common.dart';
 
 Process daemon;
 
@@ -26,7 +27,7 @@ Future<void> main() async {
     .transform<String>(utf8.decoder)
     .transform<String>(const LineSplitter())
     .listen((String line) => print('<== $line'));
-  daemon.stderr.listen((dynamic data) => stderr.add(data));
+  daemon.stderr.listen(stderr.add);
 
   stdout.write('> ');
   stdin.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen((String line) {
@@ -39,16 +40,17 @@ Future<void> main() async {
     } else if (words.first == 'start') {
       _send(<String, dynamic>{
         'method': 'app.start',
-        'params': <String, dynamic> {
+        'params': <String, dynamic>{
           'deviceId': words[1],
-          'projectDirectory': words[2]
-        }
+          'projectDirectory': words[2],
+          'launchMode': words[3],
+        },
       });
     } else if (words.first == 'stop') {
       if (words.length > 1) {
         _send(<String, dynamic>{
           'method': 'app.stop',
-          'params': <String, dynamic> { 'appId': words[1] }
+          'params': <String, dynamic>{'appId': words[1]},
         });
       } else {
         _send(<String, dynamic>{'method': 'app.stop'});
@@ -57,7 +59,7 @@ Future<void> main() async {
       if (words.length > 1) {
         _send(<String, dynamic>{
           'method': 'app.restart',
-          'params': <String, dynamic> { 'appId': words[1] }
+          'params': <String, dynamic>{'appId': words[1]},
         });
       } else {
         _send(<String, dynamic>{'method': 'app.restart'});
@@ -70,8 +72,8 @@ Future<void> main() async {
       _send(<String, dynamic>{
         'method': 'emulator.launch',
         'params': <String, dynamic>{
-          'emulatorId': words[1]
-        }
+          'emulatorId': words[1],
+        },
       });
     } else if (line == 'enable') {
       _send(<String, dynamic>{'method': 'device.enable'});
@@ -82,10 +84,10 @@ Future<void> main() async {
   });
 
   // Print in the callback can't fail.
-  daemon.exitCode.then<void>((int code) { // ignore: unawaited_futures
+  unawaited(daemon.exitCode.then<void>((int code) {
     print('daemon exiting ($code)');
     exit(code);
-  });
+  }));
 }
 
 int id = 0;

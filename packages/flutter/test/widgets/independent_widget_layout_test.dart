@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@ import 'package:flutter/rendering.dart';
 const Size _kTestViewSize = Size(800.0, 600.0);
 
 class OffscreenRenderView extends RenderView {
-  OffscreenRenderView() : super(configuration: const ViewConfiguration(size: _kTestViewSize));
+  OffscreenRenderView() : super(
+    configuration: const ViewConfiguration(size: _kTestViewSize),
+    window: WidgetsBinding.instance.window,
+  );
 
   @override
   void compositeFrame() {
@@ -20,7 +23,8 @@ class OffscreenRenderView extends RenderView {
 class OffscreenWidgetTree {
   OffscreenWidgetTree() {
     renderView.attach(pipelineOwner);
-    renderView.scheduleInitialFrame();
+    renderView.prepareInitialFrame();
+    pipelineOwner.requestVisualUpdate();
   }
 
   final RenderView renderView = OffscreenRenderView();
@@ -32,7 +36,7 @@ class OffscreenWidgetTree {
     root = RenderObjectToWidgetAdapter<RenderBox>(
       container: renderView,
       debugShortDescription: '[root]',
-      child: app
+      child: app,
     ).attachToRenderTree(buildOwner, root);
     pumpFrame();
   }
@@ -62,9 +66,15 @@ class Trigger {
 }
 
 class TriggerableWidget extends StatefulWidget {
-  const TriggerableWidget({ this.trigger, this.counter });
+  const TriggerableWidget({
+    Key key,
+    this.trigger,
+    this.counter,
+  }) : super(key: key);
+
   final Trigger trigger;
   final Counter counter;
+
   @override
   TriggerableState createState() => TriggerableState();
 }

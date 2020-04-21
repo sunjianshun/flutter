@@ -1,20 +1,36 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/gestures.dart';
 
 import 'basic.dart';
+import 'focus_manager.dart';
+import 'focus_scope.dart';
 import 'framework.dart';
 import 'media_query.dart';
+import 'notification_listener.dart';
 import 'primary_scroll_controller.dart';
 import 'scroll_controller.dart';
+import 'scroll_notification.dart';
 import 'scroll_physics.dart';
 import 'scrollable.dart';
 import 'sliver.dart';
 import 'viewport.dart';
+
+/// A representation of how a [ScrollView] should dismiss the on-screen
+/// keyboard.
+enum ScrollViewKeyboardDismissBehavior {
+  /// `manual` means there is no automatic dimissal of the on-screen keyboard.
+  /// It is up to the client to dismiss the keyboard.
+  manual,
+  /// `onDrag` means that the [ScrollView] will dismiss an on-screen keyboard
+  /// when a drag begins.
+  onDrag,
+}
 
 /// A widget that scrolls.
 ///
@@ -50,8 +66,13 @@ abstract class ScrollView extends StatelessWidget {
   /// Creates a widget that scrolls.
   ///
   /// If the [primary] argument is true, the [controller] must be null.
-  ScrollView({ // ignore: prefer_const_constructors_in_immutables
-               // TODO(aam): Remove lint ignore above once dartbug.com/34297 is fixed
+  ///
+  /// If the [shrinkWrap] argument is true, the [center] argument must be null.
+  ///
+  /// The [scrollDirection], [reverse], and [shrinkWrap] arguments must not be null.
+  ///
+  /// The [anchor] argument must be non-null and in the range 0.0 to 1.0.
+  const ScrollView({
     Key key,
     this.scrollDirection = Axis.vertical,
     this.reverse = false,
@@ -59,16 +80,26 @@ abstract class ScrollView extends StatelessWidget {
     bool primary,
     ScrollPhysics physics,
     this.shrinkWrap = false,
+    this.center,
+    this.anchor = 0.0,
     this.cacheExtent,
     this.semanticChildCount,
-  }) : assert(reverse != null),
+    this.dragStartBehavior = DragStartBehavior.start,
+    this.keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
+  }) : assert(scrollDirection != null),
+       assert(reverse != null),
        assert(shrinkWrap != null),
+       assert(dragStartBehavior != null),
        assert(!(controller != null && primary == true),
            'Primary ScrollViews obtain their ScrollController via inheritance from a PrimaryScrollController widget. '
            'You cannot both set primary to true and pass an explicit controller.'
        ),
-       primary = primary ?? controller == null && scrollDirection == Axis.vertical,
-       physics = physics ?? (primary == true || (primary == null && controller == null && scrollDirection == Axis.vertical) ? const AlwaysScrollableScrollPhysics() : null),
+       assert(!shrinkWrap || center == null),
+       assert(anchor != null),
+       assert(anchor >= 0.0 && anchor <= 1.0),
+       assert(semanticChildCount == null || semanticChildCount >= 0),
+       primary = primary ?? controller == null && identical(scrollDirection, Axis.vertical),
+       physics = physics ?? (primary == true || (primary == null && controller == null && identical(scrollDirection, Axis.vertical)) ? const AlwaysScrollableScrollPhysics() : null),
        super(key: key);
 
   /// The axis along which the scroll view scrolls.
@@ -170,6 +201,33 @@ abstract class ScrollView extends StatelessWidget {
   /// Defaults to false.
   final bool shrinkWrap;
 
+  /// The first child in the [GrowthDirection.forward] growth direction.
+  ///
+  /// Children after [center] will be placed in the [axisDirection] relative to
+  /// the [center]. Children before [center] will be placed in the opposite of
+  /// the [axisDirection] relative to the [center]. This makes the [center] the
+  /// inflection point of the growth direction.
+  ///
+  /// The [center] must be the key of one of the slivers built by [buildSlivers].
+  ///
+  /// Of the built-in subclasses of [ScrollView], only [CustomScrollView]
+  /// supports [center]; for that class, the given key must be the key of one of
+  /// the slivers in the [CustomScrollView.slivers] list.
+  ///
+  /// See also:
+  ///
+  ///  * [anchor], which controls where the [center] as aligned in the viewport.
+  final Key center;
+
+  /// The relative position of the zero scroll offset.
+  ///
+  /// For example, if [anchor] is 0.5 and the [axisDirection] is
+  /// [AxisDirection.down] or [AxisDirection.up], then the zero scroll offset is
+  /// vertically centered within the viewport. If the [anchor] is 1.0, and the
+  /// [axisDirection] is [AxisDirection.right], then the zero scroll offset is
+  /// on the left edge of the viewport.
+  final double anchor;
+
   /// {@macro flutter.rendering.viewport.cacheExtent}
   final double cacheExtent;
 
@@ -177,7 +235,7 @@ abstract class ScrollView extends StatelessWidget {
   ///
   /// Some subtypes of [ScrollView] can infer this value automatically. For
   /// example [ListView] will use the number of widgets in the child list,
-  /// while the [new ListView.separated] constructor will use half that amount.
+  /// while the [ListView.separated] constructor will use half that amount.
   ///
   /// For [CustomScrollView] and other types which do not receive a builder
   /// or list of widgets, the child count must be explicitly provided. If the
@@ -187,6 +245,13 @@ abstract class ScrollView extends StatelessWidget {
   ///
   ///  * [SemanticsConfiguration.scrollChildCount], the corresponding semantics property.
   final int semanticChildCount;
+
+  /// {@macro flutter.widgets.scrollable.dragStartBehavior}
+  final DragStartBehavior dragStartBehavior;
+
+  /// [ScrollViewKeyboardDismissBehavior] the defines how this [ScrollView] will
+  /// dismiss the keyboard automatically.
+  final ScrollViewKeyboardDismissBehavior keyboardDismissBehavior;
 
   /// Returns the [AxisDirection] in which the scroll view scrolls.
   ///
@@ -216,6 +281,14 @@ abstract class ScrollView extends StatelessWidget {
   /// Subclasses may override this method to change how the viewport is built.
   /// The default implementation uses a [ShrinkWrappingViewport] if [shrinkWrap]
   /// is true, and a regular [Viewport] otherwise.
+  ///
+  /// The `offset` argument is the value obtained from
+  /// [Scrollable.viewportBuilder].
+  ///
+  /// The `axisDirection` argument is the value obtained from [getDirection],
+  /// which by default uses [scrollDirection] and [reverse].
+  ///
+  /// The `slivers` argument is the value obtained from [buildSlivers].
   @protected
   Widget buildViewport(
     BuildContext context,
@@ -235,6 +308,8 @@ abstract class ScrollView extends StatelessWidget {
       offset: offset,
       slivers: slivers,
       cacheExtent: cacheExtent,
+      center: center,
+      anchor: anchor,
     );
   }
 
@@ -243,10 +318,10 @@ abstract class ScrollView extends StatelessWidget {
     final List<Widget> slivers = buildSlivers(context);
     final AxisDirection axisDirection = getDirection(context);
 
-    final ScrollController scrollController = primary
-      ? PrimaryScrollController.of(context)
-      : controller;
+    final ScrollController scrollController =
+        primary ? PrimaryScrollController.of(context) : controller;
     final Scrollable scrollable = Scrollable(
+      dragStartBehavior: dragStartBehavior,
       axisDirection: axisDirection,
       controller: scrollController,
       physics: physics,
@@ -255,9 +330,24 @@ abstract class ScrollView extends StatelessWidget {
         return buildViewport(context, offset, axisDirection, slivers);
       },
     );
-    return primary && scrollController != null
-      ? PrimaryScrollController.none(child: scrollable)
-      : scrollable;
+    final Widget scrollableResult = primary && scrollController != null
+        ? PrimaryScrollController.none(child: scrollable)
+        : scrollable;
+
+    if (keyboardDismissBehavior == ScrollViewKeyboardDismissBehavior.onDrag) {
+      return NotificationListener<ScrollUpdateNotification>(
+        child: scrollableResult,
+        onNotification: (ScrollUpdateNotification notification) {
+          final FocusScopeNode focusScope = FocusScope.of(context);
+          if (notification.dragDetails != null && focusScope.hasFocus) {
+            focusScope.unfocus();
+          }
+          return false;
+        },
+      );
+    } else {
+      return scrollableResult;
+    }
   }
 
   @override
@@ -285,7 +375,9 @@ abstract class ScrollView extends StatelessWidget {
 /// To control the initial scroll offset of the scroll view, provide a
 /// [controller] with its [ScrollController.initialScrollOffset] property set.
 ///
-/// ## Sample code
+/// {@animation 400 376 https://flutter.github.io/assets-for-api-docs/assets/widgets/custom_scroll_view.mp4}
+///
+/// {@tool snippet}
 ///
 /// This sample code shows a scroll view that contains a flexible pinned app
 /// bar, a grid, and an infinite list.
@@ -312,7 +404,7 @@ abstract class ScrollView extends StatelessWidget {
 ///           return Container(
 ///             alignment: Alignment.center,
 ///             color: Colors.teal[100 * (index % 9)],
-///             child: Text('grid item $index'),
+///             child: Text('Grid Item $index'),
 ///           );
 ///         },
 ///         childCount: 20,
@@ -325,7 +417,7 @@ abstract class ScrollView extends StatelessWidget {
 ///           return Container(
 ///             alignment: Alignment.center,
 ///             color: Colors.lightBlue[100 * (index % 9)],
-///             child: Text('list item $index'),
+///             child: Text('List Item $index'),
 ///           );
 ///         },
 ///       ),
@@ -333,13 +425,14 @@ abstract class ScrollView extends StatelessWidget {
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
 ///
 /// ## Accessibility
 ///
 /// A [CustomScrollView] can allow Talkback/VoiceOver to make announcements
 /// to the user when the scroll state changes. For example, on Android an
 /// announcement might be read as "showing items 1 to 10 of 23". To produce
-/// this announcment, the scroll view needs three pieces of information:
+/// this announcement, the scroll view needs three pieces of information:
 ///
 ///   * The first visible child index.
 ///   * The total number of children.
@@ -355,13 +448,13 @@ abstract class ScrollView extends StatelessWidget {
 /// generated semantics of each scrollable item with a semantic index. This can
 /// be done by wrapping the child widgets in an [IndexedSemantics].
 ///
-/// This semantic index is not necesarily the same as the index of the widget in
+/// This semantic index is not necessarily the same as the index of the widget in
 /// the scrollable, because some widgets may not contribute semantic
-/// information. Consider a [new ListView.separated()]: every other widget is a
+/// information. Consider a [ListView.separated]: every other widget is a
 /// divider with no semantic information. In this case, only odd numbered
 /// widgets have a semantic index (equal to the index ~/ 2). Furthermore, the
 /// total number of children in this example would be half the number of
-/// widgets. (The [new ListView.separated()] constructor handles this
+/// widgets. (The [ListView.separated] constructor handles this
 /// automatically; this is only used here as an example.)
 ///
 /// The total number of visible children can be provided by the constructor
@@ -385,8 +478,8 @@ abstract class ScrollView extends StatelessWidget {
 class CustomScrollView extends ScrollView {
   /// Creates a [ScrollView] that creates custom scroll effects using slivers.
   ///
-  /// If the [primary] argument is true, the [controller] must be null.
-  CustomScrollView({
+  /// See the [ScrollView] constructor for more details on these arguments.
+  const CustomScrollView({
     Key key,
     Axis scrollDirection = Axis.vertical,
     bool reverse = false,
@@ -394,9 +487,12 @@ class CustomScrollView extends ScrollView {
     bool primary,
     ScrollPhysics physics,
     bool shrinkWrap = false,
+    Key center,
+    double anchor = 0.0,
     double cacheExtent,
     this.slivers = const <Widget>[],
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
   }) : super(
     key: key,
     scrollDirection: scrollDirection,
@@ -405,8 +501,11 @@ class CustomScrollView extends ScrollView {
     primary: primary,
     physics: physics,
     shrinkWrap: shrinkWrap,
+    center: center,
+    anchor: anchor,
     cacheExtent: cacheExtent,
     semanticChildCount: semanticChildCount,
+    dragStartBehavior: dragStartBehavior,
   );
 
   /// The slivers to place inside the viewport.
@@ -428,7 +527,7 @@ abstract class BoxScrollView extends ScrollView {
   /// Creates a [ScrollView] uses a single child layout model.
   ///
   /// If the [primary] argument is true, the [controller] must be null.
-  BoxScrollView({
+  const BoxScrollView({
     Key key,
     Axis scrollDirection = Axis.vertical,
     bool reverse = false,
@@ -439,6 +538,8 @@ abstract class BoxScrollView extends ScrollView {
     this.padding,
     double cacheExtent,
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
+    ScrollViewKeyboardDismissBehavior keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
   }) : super(
     key: key,
     scrollDirection: scrollDirection,
@@ -449,6 +550,8 @@ abstract class BoxScrollView extends ScrollView {
     shrinkWrap: shrinkWrap,
     cacheExtent: cacheExtent,
     semanticChildCount: semanticChildCount,
+    dragStartBehavior: dragStartBehavior,
+    keyboardDismissBehavior: keyboardDismissBehavior,
   );
 
   /// The amount of space by which to inset the children.
@@ -500,6 +603,8 @@ abstract class BoxScrollView extends ScrollView {
 
 /// A scrollable list of widgets arranged linearly.
 ///
+/// {@youtube 560 315 https://www.youtube.com/watch?v=KJpkjHGiI5A}
+///
 /// [ListView] is the most commonly used scrolling widget. It displays its
 /// children one after another in the scroll direction. In the cross axis, the
 /// children are required to fill the [ListView].
@@ -540,19 +645,88 @@ abstract class BoxScrollView extends ScrollView {
 /// extremities to avoid partial obstructions indicated by [MediaQuery]'s
 /// padding. To avoid this behavior, override with a zero [padding] property.
 ///
-/// ## Sample code
+/// {@tool snippet}
+/// This example uses the default constructor for [ListView] which takes an
+/// explicit [List<Widget>] of children. This [ListView]'s children are made up
+/// of [Container]s with [Text].
 ///
-/// An infinite list of children:
+/// ![A ListView of 3 amber colored containers with sample text.](https://flutter.github.io/assets-for-api-docs/assets/widgets/list_view.png)
 ///
 /// ```dart
-/// ListView.builder(
-///   padding: EdgeInsets.all(8.0),
-///   itemExtent: 20.0,
-///   itemBuilder: (BuildContext context, int index) {
-///     return Text('entry $index');
-///   },
+/// ListView(
+///   padding: const EdgeInsets.all(8),
+///   children: <Widget>[
+///     Container(
+///       height: 50,
+///       color: Colors.amber[600],
+///       child: const Center(child: Text('Entry A')),
+///     ),
+///     Container(
+///       height: 50,
+///       color: Colors.amber[500],
+///       child: const Center(child: Text('Entry B')),
+///     ),
+///     Container(
+///       height: 50,
+///       color: Colors.amber[100],
+///       child: const Center(child: Text('Entry C')),
+///     ),
+///   ],
 /// )
 /// ```
+/// {@end-tool}
+///
+/// {@tool snippet}
+/// This example mirrors the previous one, creating the same list using the
+/// [ListView.builder] constructor. Using the [IndexedWidgetBuilder], children
+/// are built lazily and can be infinite in number.
+///
+/// ![A ListView of 3 amber colored containers with sample text.](https://flutter.github.io/assets-for-api-docs/assets/widgets/list_view_builder.png)
+///
+/// ```dart
+/// final List<String> entries = <String>['A', 'B', 'C'];
+/// final List<int> colorCodes = <int>[600, 500, 100];
+///
+/// ListView.builder(
+///   padding: const EdgeInsets.all(8),
+///   itemCount: entries.length,
+///   itemBuilder: (BuildContext context, int index) {
+///     return Container(
+///       height: 50,
+///       color: Colors.amber[colorCodes[index]],
+///       child: Center(child: Text('Entry ${entries[index]}')),
+///     );
+///   }
+/// );
+/// ```
+/// {@end-tool}
+///
+/// {@tool snippet}
+/// This example continues to build from our the previous ones, creating a
+/// similar list using [ListView.separated]. Here, a [Divider] is used as a
+/// separator.
+///
+/// ![A ListView of 3 amber colored containers with sample text and a Divider
+/// between each of them.](https://flutter.github.io/assets-for-api-docs/assets/widgets/list_view_separated.png)
+///
+/// ```dart
+/// final List<String> entries = <String>['A', 'B', 'C'];
+/// final List<int> colorCodes = <int>[600, 500, 100];
+///
+/// ListView.separated(
+///   padding: const EdgeInsets.all(8),
+///   itemCount: entries.length,
+///   itemBuilder: (BuildContext context, int index) {
+///     return Container(
+///       height: 50,
+///       color: Colors.amber[colorCodes[index]],
+///       child: Center(child: Text('Entry ${entries[index]}')),
+///     );
+///   },
+///   separatorBuilder: (BuildContext context, int index) => const Divider(),
+/// );
+/// ```
+/// {@end-tool}
 ///
 /// ## Child elements' lifecycle
 ///
@@ -585,7 +759,7 @@ abstract class BoxScrollView extends ScrollView {
 ///
 ///  * Letting [KeepAlive] be the root widget of the list child widget subtree
 ///    that needs to be preserved. The [KeepAlive] widget marks the child
-///    subtree's top render object child for keep-alive. When the associated top
+///    subtree's top render object child for keepalive. When the associated top
 ///    render object is scrolled out of view, the list keeps the child's render
 ///    object (and by extension, its associated elements and states) in a cache
 ///    list instead of destroying them. When scrolled back into view, the render
@@ -596,14 +770,14 @@ abstract class BoxScrollView extends ScrollView {
 ///    widget subtree with other widgets.
 ///
 ///  * Using [AutomaticKeepAlive] widgets (inserted by default when
-///    [addAutomaticKeepAlives] is true). Instead of unconditionally caching the
-///    child element subtree when scrolling off-screen like [KeepAlive],
-///    [AutomaticKeepAlive] can let whether to cache the subtree be determined
-///    by descendant logic in the subtree.
+///    [addAutomaticKeepAlives] is true). [AutomaticKeepAlive] allows descendant
+///    widgets to control whether the subtree is actually kept alive or not.
+///    This behavior is in contrast with [KeepAlive], which will unconditionally keep
+///    the subtree alive.
 ///
 ///    As an example, the [EditableText] widget signals its list child element
 ///    subtree to stay alive while its text field has input focus. If it doesn't
-///    have focus and no other descendants signaled for keep-alive via a
+///    have focus and no other descendants signaled for keepalive via a
 ///    [KeepAliveNotification], the list child element subtree will be destroyed
 ///    when scrolled away.
 ///
@@ -631,11 +805,11 @@ abstract class BoxScrollView extends ScrollView {
 ///
 /// The [childrenDelegate] property on [ListView] corresponds to the
 /// [SliverList.delegate] (or [SliverFixedExtentList.delegate]) property. The
-/// [new ListView] constructor's `children` argument corresponds to the
+/// [ListView] constructor's `children` argument corresponds to the
 /// [childrenDelegate] being a [SliverChildListDelegate] with that same
-/// argument. The [new ListView.builder] constructor's `itemBuilder` and
-/// `childCount` arguments correspond to the [childrenDelegate] being a
-/// [SliverChildBuilderDelegate] with the matching arguments.
+/// argument. The [ListView.builder] constructor's `itemBuilder` and
+/// `itemCount` arguments correspond to the [childrenDelegate] being a
+/// [SliverChildBuilderDelegate] with the equivalent arguments.
 ///
 /// The [padding] property corresponds to having a [SliverPadding] in the
 /// [CustomScrollView.slivers] property instead of the list itself, and having
@@ -649,7 +823,7 @@ abstract class BoxScrollView extends ScrollView {
 /// [SliverGrid] or [SliverAppBar], can be put in the [CustomScrollView.slivers]
 /// list.
 ///
-/// ### Sample code
+/// {@tool snippet}
 ///
 /// Here are two brief snippets showing a [ListView] and its equivalent using
 /// [CustomScrollView]:
@@ -659,13 +833,15 @@ abstract class BoxScrollView extends ScrollView {
 ///   shrinkWrap: true,
 ///   padding: const EdgeInsets.all(20.0),
 ///   children: <Widget>[
-///     const Text('I\'m dedicating every day to you'),
+///     const Text("I'm dedicating every day to you"),
 ///     const Text('Domestic life was never quite my style'),
 ///     const Text('When you smile, you knock me out, I fall apart'),
 ///     const Text('And I thought I was so smart'),
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
+/// {@tool snippet}
 ///
 /// ```dart
 /// CustomScrollView(
@@ -676,7 +852,7 @@ abstract class BoxScrollView extends ScrollView {
 ///       sliver: SliverList(
 ///         delegate: SliverChildListDelegate(
 ///           <Widget>[
-///             const Text('I\'m dedicating every day to you'),
+///             const Text("I'm dedicating every day to you"),
 ///             const Text('Domestic life was never quite my style'),
 ///             const Text('When you smile, you knock me out, I fall apart'),
 ///             const Text('And I thought I was so smart'),
@@ -687,6 +863,7 @@ abstract class BoxScrollView extends ScrollView {
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///
@@ -701,6 +878,7 @@ abstract class BoxScrollView extends ScrollView {
 ///    scrolling.
 ///  * [ScrollNotification] and [NotificationListener], which can be used to watch
 ///    the scroll position without using a [ScrollController].
+///  * The [catalog of layout widgets](https://flutter.dev/widgets/layout/).
 class ListView extends BoxScrollView {
   /// Creates a scrollable, linear array of widgets from an explicit [List].
   ///
@@ -709,8 +887,8 @@ class ListView extends BoxScrollView {
   /// child that could possibly be displayed in the list view instead of just
   /// those children that are actually visible.
   ///
-  /// It is usually more efficient to create children on demand using [new
-  /// ListView.builder].
+  /// It is usually more efficient to create children on demand using
+  /// [ListView.builder].
   ///
   /// The `addAutomaticKeepAlives` argument corresponds to the
   /// [SliverChildListDelegate.addAutomaticKeepAlives] property. The
@@ -735,23 +913,28 @@ class ListView extends BoxScrollView {
     double cacheExtent,
     List<Widget> children = const <Widget>[],
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
+    ScrollViewKeyboardDismissBehavior keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
   }) : childrenDelegate = SliverChildListDelegate(
          children,
          addAutomaticKeepAlives: addAutomaticKeepAlives,
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
-       ), super(
-    key: key,
-    scrollDirection: scrollDirection,
-    reverse: reverse,
-    controller: controller,
-    primary: primary,
-    physics: physics,
-    shrinkWrap: shrinkWrap,
-    padding: padding,
-    cacheExtent: cacheExtent,
-    semanticChildCount: semanticChildCount ?? children.length,
-  );
+       ),
+       super(
+         key: key,
+         scrollDirection: scrollDirection,
+         reverse: reverse,
+         controller: controller,
+         primary: primary,
+         physics: physics,
+         shrinkWrap: shrinkWrap,
+         padding: padding,
+         cacheExtent: cacheExtent,
+         semanticChildCount: semanticChildCount ?? children.length,
+         dragStartBehavior: dragStartBehavior,
+         keyboardDismissBehavior: keyboardDismissBehavior,
+       );
 
   /// Creates a scrollable, linear array of widgets that are created on demand.
   ///
@@ -768,9 +951,9 @@ class ListView extends BoxScrollView {
   /// The `itemBuilder` should actually create the widget instances when called.
   /// Avoid using a builder that returns a previously-constructed widget; if the
   /// list view's children are created in advance, or all at once when the
-  /// [ListView] itself is created, it is more efficient to use [new ListView].
-  /// Even more efficient, however, is to create the instances on demand using
-  /// this constructor's `itemBuilder` callback.
+  /// [ListView] itself is created, it is more efficient to use the [ListView]
+  /// constructor. Even more efficient, however, is to create the instances on
+  /// demand using this constructor's `itemBuilder` callback.
   ///
   /// The `addAutomaticKeepAlives` argument corresponds to the
   /// [SliverChildBuilderDelegate.addAutomaticKeepAlives] property. The
@@ -779,6 +962,10 @@ class ListView extends BoxScrollView {
   /// `addSemanticIndexes` argument corresponds to the
   /// [SliverChildBuilderDelegate.addSemanticIndexes] property. None may be
   /// null.
+  ///
+  /// [ListView.builder] by default does not support child reordering. If
+  /// you are planning to change child order at a later time, consider using
+  /// [ListView] or [ListView.custom].
   ListView.builder({
     Key key,
     Axis scrollDirection = Axis.vertical,
@@ -796,24 +983,29 @@ class ListView extends BoxScrollView {
     bool addSemanticIndexes = true,
     double cacheExtent,
     int semanticChildCount,
-  }) : childrenDelegate = SliverChildBuilderDelegate(
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
+  }) : assert(itemCount == null || itemCount >= 0),
+       assert(semanticChildCount == null || semanticChildCount <= itemCount),
+       childrenDelegate = SliverChildBuilderDelegate(
          itemBuilder,
          childCount: itemCount,
          addAutomaticKeepAlives: addAutomaticKeepAlives,
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
-       ), super(
-    key: key,
-    scrollDirection: scrollDirection,
-    reverse: reverse,
-    controller: controller,
-    primary: primary,
-    physics: physics,
-    shrinkWrap: shrinkWrap,
-    padding: padding,
-    cacheExtent: cacheExtent,
-    semanticChildCount: semanticChildCount ?? itemCount,
-  );
+       ),
+       super(
+         key: key,
+         scrollDirection: scrollDirection,
+         reverse: reverse,
+         controller: controller,
+         primary: primary,
+         physics: physics,
+         shrinkWrap: shrinkWrap,
+         padding: padding,
+         cacheExtent: cacheExtent,
+         semanticChildCount: semanticChildCount ?? itemCount,
+         dragStartBehavior: dragStartBehavior,
+       );
 
   /// Creates a fixed-length scrollable linear array of list "items" separated
   /// by list item "separators".
@@ -835,9 +1027,9 @@ class ListView extends BoxScrollView {
   /// widget instances when called. Avoid using a builder that returns a
   /// previously-constructed widget; if the list view's children are created in
   /// advance, or all at once when the [ListView] itself is created, it is more
-  /// efficient to use [new ListView].
+  /// efficient to use the [ListView] constructor.
   ///
-  /// ## Sample code
+  /// {@tool snippet}
   ///
   /// This example shows how to create [ListView] whose [ListTile] list items
   /// are separated by [Divider]s.
@@ -853,6 +1045,7 @@ class ListView extends BoxScrollView {
   ///   },
   /// )
   /// ```
+  /// {@end-tool}
   ///
   /// The `addAutomaticKeepAlives` argument corresponds to the
   /// [SliverChildBuilderDelegate.addAutomaticKeepAlives] property. The
@@ -877,6 +1070,7 @@ class ListView extends BoxScrollView {
     bool addRepaintBoundaries = true,
     bool addSemanticIndexes = true,
     double cacheExtent,
+    ScrollViewKeyboardDismissBehavior keyboardDismissBehavior = ScrollViewKeyboardDismissBehavior.manual,
   }) : assert(itemBuilder != null),
        assert(separatorBuilder != null),
        assert(itemCount != null && itemCount >= 0),
@@ -884,35 +1078,125 @@ class ListView extends BoxScrollView {
        childrenDelegate = SliverChildBuilderDelegate(
          (BuildContext context, int index) {
            final int itemIndex = index ~/ 2;
-           return index.isEven
-             ? itemBuilder(context, itemIndex)
-             : separatorBuilder(context, itemIndex);
+           Widget widget;
+           if (index.isEven) {
+             widget = itemBuilder(context, itemIndex);
+           } else {
+             widget = separatorBuilder(context, itemIndex);
+             assert(() {
+               if (widget == null) {
+                 throw FlutterError('separatorBuilder cannot return null.');
+               }
+               return true;
+             }());
+           }
+           return widget;
          },
-         childCount: _computeSemanticChildCount(itemCount),
+         childCount: _computeActualChildCount(itemCount),
          addAutomaticKeepAlives: addAutomaticKeepAlives,
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
          semanticIndexCallback: (Widget _, int index) {
            return index.isEven ? index ~/ 2 : null;
-         }
-       ), super(
-    key: key,
-    scrollDirection: scrollDirection,
-    reverse: reverse,
-    controller: controller,
-    primary: primary,
-    physics: physics,
-    shrinkWrap: shrinkWrap,
-    padding: padding,
-    cacheExtent: cacheExtent,
-    semanticChildCount: _computeSemanticChildCount(itemCount),
-  );
+         },
+       ),
+       super(
+         key: key,
+         scrollDirection: scrollDirection,
+         reverse: reverse,
+         controller: controller,
+         primary: primary,
+         physics: physics,
+         shrinkWrap: shrinkWrap,
+         padding: padding,
+         cacheExtent: cacheExtent,
+         semanticChildCount: itemCount,
+         keyboardDismissBehavior: keyboardDismissBehavior,
+       );
 
   /// Creates a scrollable, linear array of widgets with a custom child model.
   ///
   /// For example, a custom child model can control the algorithm used to
   /// estimate the size of children that are not actually visible.
-  ListView.custom({
+  ///
+  /// {@tool snippet}
+  ///
+  /// This [ListView] uses a custom [SliverChildBuilderDelegate] to support child
+  /// reordering.
+  ///
+  /// ```dart
+  /// class MyListView extends StatefulWidget {
+  ///   @override
+  ///   _MyListViewState createState() => _MyListViewState();
+  /// }
+  ///
+  /// class _MyListViewState extends State<MyListView> {
+  ///   List<String> items = <String>['1', '2', '3', '4', '5'];
+  ///
+  ///   void _reverse() {
+  ///     setState(() {
+  ///       items = items.reversed.toList();
+  ///     });
+  ///   }
+  ///
+  ///   @override
+  ///   Widget build(BuildContext context) {
+  ///     return Scaffold(
+  ///       body: SafeArea(
+  ///         child: ListView.custom(
+  ///           childrenDelegate: SliverChildBuilderDelegate(
+  ///             (BuildContext context, int index) {
+  ///               return KeepAlive(
+  ///                 data: items[index],
+  ///                 key: ValueKey<String>(items[index]),
+  ///               );
+  ///             },
+  ///             childCount: items.length,
+  ///             findChildIndexCallback: (Key key) {
+  ///               final ValueKey valueKey = key;
+  ///               final String data = valueKey.value;
+  ///               return items.indexOf(data);
+  ///             }
+  ///           ),
+  ///         ),
+  ///       ),
+  ///       bottomNavigationBar: BottomAppBar(
+  ///         child: Row(
+  ///           mainAxisAlignment: MainAxisAlignment.center,
+  ///           children: <Widget>[
+  ///             FlatButton(
+  ///               onPressed: () => _reverse(),
+  ///               child: Text('Reverse items'),
+  ///             ),
+  ///           ],
+  ///         ),
+  ///       ),
+  ///     );
+  ///   }
+  /// }
+  ///
+  /// class KeepAlive extends StatefulWidget {
+  ///   const KeepAlive({Key key, this.data}) : super(key: key);
+  ///
+  ///   final String data;
+  ///
+  ///   @override
+  ///   _KeepAliveState createState() => _KeepAliveState();
+  /// }
+  ///
+  /// class _KeepAliveState extends State<KeepAlive> with AutomaticKeepAliveClientMixin{
+  ///   @override
+  ///   bool get wantKeepAlive => true;
+  ///
+  ///   @override
+  ///   Widget build(BuildContext context) {
+  ///     super.build(context);
+  ///     return Text(widget.data);
+  ///   }
+  /// }
+  /// ```
+  /// {@end-tool}
+  const ListView.custom({
     Key key,
     Axis scrollDirection = Axis.vertical,
     bool reverse = false,
@@ -973,8 +1257,8 @@ class ListView extends BoxScrollView {
     properties.add(DoubleProperty('itemExtent', itemExtent, defaultValue: null));
   }
 
-  // Helper method to compute the semantic child count for the separated constructor.
-  static int _computeSemanticChildCount(int itemCount) {
+  // Helper method to compute the actual child count for the separated constructor.
+  static int _computeActualChildCount(int itemCount) {
     return math.max(0, itemCount * 2 - 1);
   }
 }
@@ -1024,17 +1308,17 @@ class ListView extends BoxScrollView {
 /// [SliverGrid.delegate] property, and the [gridDelegate] property on the
 /// [GridView] corresponds to the [SliverGrid.gridDelegate] property.
 ///
-/// The [new GridView], [new GridView.count], and [new GridView.extent]
+/// The [GridView], [GridView.count], and [GridView.extent]
 /// constructors' `children` arguments correspond to the [childrenDelegate]
-/// being a [SliverChildListDelegate] with that same argument. The [new
-/// GridView.builder] constructor's `itemBuilder` and `childCount` arguments
+/// being a [SliverChildListDelegate] with that same argument. The
+/// [GridView.builder] constructor's `itemBuilder` and `childCount` arguments
 /// correspond to the [childrenDelegate] being a [SliverChildBuilderDelegate]
 /// with the matching arguments.
 ///
-/// The [new GridView.count] and [new GridView.extent] constructors create
+/// The [GridView.count] and [GridView.extent] constructors create
 /// custom grid delegates, and have equivalently named constructors on
-/// [SliverGrid] to ease the transition: [new SliverGrid.count] and [new
-/// SliverGrid.extent] respectively.
+/// [SliverGrid] to ease the transition: [SliverGrid.count] and
+/// [SliverGrid.extent] respectively.
 ///
 /// The [padding] property corresponds to having a [SliverPadding] in the
 /// [CustomScrollView.slivers] property instead of the grid itself, and having
@@ -1048,50 +1332,110 @@ class ListView extends BoxScrollView {
 /// [SliverList] or [SliverAppBar], can be put in the [CustomScrollView.slivers]
 /// list.
 ///
-/// ### Sample code
+/// {@tool snippet}
+/// This example demonstrates how to create a [GridView] with two columns. The
+/// children are spaced apart using the [crossAxisSpacing] and [mainAxisSpacing]
+/// properties.
 ///
-/// Here are two brief snippets showing a [GridView] and its equivalent using
-/// [CustomScrollView]:
+/// ![The GridView displays six children with different background colors arranged in two columns](https://flutter.github.io/assets-for-api-docs/assets/widgets/grid_view.png)
 ///
 /// ```dart
 /// GridView.count(
 ///   primary: false,
-///   padding: const EdgeInsets.all(20.0),
-///   crossAxisSpacing: 10.0,
+///   padding: const EdgeInsets.all(20),
+///   crossAxisSpacing: 10,
+///   mainAxisSpacing: 10,
 ///   crossAxisCount: 2,
 ///   children: <Widget>[
-///     const Text('He\'d have you all unravel at the'),
-///     const Text('Heed not the rabble'),
-///     const Text('Sound of screams but the'),
-///     const Text('Who scream'),
-///     const Text('Revolution is coming...'),
-///     const Text('Revolution, they...'),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text("He'd have you all unravel at the"),
+///       color: Colors.teal[100],
+///     ),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text('Heed not the rabble'),
+///       color: Colors.teal[200],
+///     ),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text('Sound of screams but the'),
+///       color: Colors.teal[300],
+///     ),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text('Who scream'),
+///       color: Colors.teal[400],
+///     ),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text('Revolution is coming...'),
+///       color: Colors.teal[500],
+///     ),
+///     Container(
+///       padding: const EdgeInsets.all(8),
+///       child: const Text('Revolution, they...'),
+///       color: Colors.teal[600],
+///     ),
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
+///
+/// {@tool snippet}
+/// This example shows how to create the same grid as the previous example
+/// using a [CustomScrollView] and a [SliverGrid].
+///
+/// ![The CustomScrollView contains a SliverGrid that displays six children with different background colors arranged in two columns](https://flutter.github.io/assets-for-api-docs/assets/widgets/grid_view_custom_scroll.png)
 ///
 /// ```dart
 /// CustomScrollView(
 ///   primary: false,
 ///   slivers: <Widget>[
 ///     SliverPadding(
-///       padding: const EdgeInsets.all(20.0),
+///       padding: const EdgeInsets.all(20),
 ///       sliver: SliverGrid.count(
-///         crossAxisSpacing: 10.0,
+///         crossAxisSpacing: 10,
+///         mainAxisSpacing: 10,
 ///         crossAxisCount: 2,
 ///         children: <Widget>[
-///           const Text('He\'d have you all unravel at the'),
-///           const Text('Heed not the rabble'),
-///           const Text('Sound of screams but the'),
-///           const Text('Who scream'),
-///           const Text('Revolution is coming...'),
-///           const Text('Revolution, they...'),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text("He'd have you all unravel at the"),
+///             color: Colors.green[100],
+///           ),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text('Heed not the rabble'),
+///             color: Colors.green[200],
+///           ),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text('Sound of screams but the'),
+///             color: Colors.green[300],
+///           ),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text('Who scream'),
+///             color: Colors.green[400],
+///           ),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text('Revolution is coming...'),
+///             color: Colors.green[500],
+///           ),
+///           Container(
+///             padding: const EdgeInsets.all(8),
+///             child: const Text('Revolution, they...'),
+///             color: Colors.green[600],
+///           ),
 ///         ],
 ///       ),
 ///     ),
 ///   ],
 /// )
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///
@@ -1108,6 +1452,7 @@ class ListView extends BoxScrollView {
 ///    tiles that have a maximum cross-axis extent.
 ///  * [ScrollNotification] and [NotificationListener], which can be used to watch
 ///    the scroll position without using a [ScrollController].
+///  * The [catalog of layout widgets](https://flutter.dev/widgets/layout/).
 class GridView extends BoxScrollView {
   /// Creates a scrollable, 2D array of widgets with a custom
   /// [SliverGridDelegate].
@@ -1219,7 +1564,7 @@ class GridView extends BoxScrollView {
   /// a [SliverChildBuilderDelegate] or use the [GridView.builder] constructor.
   ///
   /// The [gridDelegate] and [childrenDelegate] arguments must not be null.
-  GridView.custom({
+  const GridView.custom({
     Key key,
     Axis scrollDirection = Axis.vertical,
     bool reverse = false,
@@ -1232,6 +1577,7 @@ class GridView extends BoxScrollView {
     @required this.childrenDelegate,
     double cacheExtent,
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
   }) : assert(gridDelegate != null),
        assert(childrenDelegate != null),
        super(
@@ -1245,6 +1591,7 @@ class GridView extends BoxScrollView {
          padding: padding,
          cacheExtent: cacheExtent,
          semanticChildCount: semanticChildCount,
+         dragStartBehavior: dragStartBehavior,
        );
 
   /// Creates a scrollable, 2D array of widgets with a fixed number of tiles in
@@ -1260,7 +1607,7 @@ class GridView extends BoxScrollView {
   ///
   /// See also:
   ///
-  ///  * [new SliverGrid.count], the equivalent constructor for [SliverGrid].
+  ///  * [SliverGrid.count], the equivalent constructor for [SliverGrid].
   GridView.count({
     Key key,
     Axis scrollDirection = Axis.vertical,
@@ -1280,6 +1627,7 @@ class GridView extends BoxScrollView {
     double cacheExtent,
     List<Widget> children = const <Widget>[],
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
   }) : gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
          crossAxisCount: crossAxisCount,
          mainAxisSpacing: mainAxisSpacing,
@@ -1291,18 +1639,20 @@ class GridView extends BoxScrollView {
          addAutomaticKeepAlives: addAutomaticKeepAlives,
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
-       ), super(
-    key: key,
-    scrollDirection: scrollDirection,
-    reverse: reverse,
-    controller: controller,
-    primary: primary,
-    physics: physics,
-    shrinkWrap: shrinkWrap,
-    padding: padding,
-    cacheExtent: cacheExtent,
-    semanticChildCount: semanticChildCount ?? children.length,
-  );
+       ),
+       super(
+         key: key,
+         scrollDirection: scrollDirection,
+         reverse: reverse,
+         controller: controller,
+         primary: primary,
+         physics: physics,
+         shrinkWrap: shrinkWrap,
+         padding: padding,
+         cacheExtent: cacheExtent,
+         semanticChildCount: semanticChildCount ?? children.length,
+         dragStartBehavior: dragStartBehavior,
+       );
 
   /// Creates a scrollable, 2D array of widgets with tiles that each have a
   /// maximum cross-axis extent.
@@ -1317,7 +1667,7 @@ class GridView extends BoxScrollView {
   ///
   /// See also:
   ///
-  ///  * [new SliverGrid.extent], the equivalent constructor for [SliverGrid].
+  ///  * [SliverGrid.extent], the equivalent constructor for [SliverGrid].
   GridView.extent({
     Key key,
     Axis scrollDirection = Axis.vertical,
@@ -1336,6 +1686,7 @@ class GridView extends BoxScrollView {
     bool addSemanticIndexes = true,
     List<Widget> children = const <Widget>[],
     int semanticChildCount,
+    DragStartBehavior dragStartBehavior = DragStartBehavior.start,
   }) : gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
          maxCrossAxisExtent: maxCrossAxisExtent,
          mainAxisSpacing: mainAxisSpacing,
@@ -1347,21 +1698,23 @@ class GridView extends BoxScrollView {
          addAutomaticKeepAlives: addAutomaticKeepAlives,
          addRepaintBoundaries: addRepaintBoundaries,
          addSemanticIndexes: addSemanticIndexes,
-       ), super(
-    key: key,
-    scrollDirection: scrollDirection,
-    reverse: reverse,
-    controller: controller,
-    primary: primary,
-    physics: physics,
-    shrinkWrap: shrinkWrap,
-    padding: padding,
-    semanticChildCount: semanticChildCount ?? children.length,
-  );
+       ),
+       super(
+         key: key,
+         scrollDirection: scrollDirection,
+         reverse: reverse,
+         controller: controller,
+         primary: primary,
+         physics: physics,
+         shrinkWrap: shrinkWrap,
+         padding: padding,
+         semanticChildCount: semanticChildCount ?? children.length,
+         dragStartBehavior: dragStartBehavior,
+       );
 
   /// A delegate that controls the layout of the children within the [GridView].
   ///
-  /// The [GridView] and [GridView.custom] constructors let you specify this
+  /// The [GridView], [GridView.builder], and [GridView.custom] constructors let you specify this
   /// delegate explicitly. The other constructors create a [gridDelegate]
   /// implicitly.
   final SliverGridDelegate gridDelegate;

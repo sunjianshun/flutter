@@ -53,5 +53,7 @@
   "collapsedIconTapHint": "Extindeți",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "un caracter rămas",
-  "remainingTextFieldCharacterCountOther": "$remainingCount de caractere rămase"
+  "remainingTextFieldCharacterCountOther": "$remainingCount de caractere rămase",
+  "refreshIndicatorSemanticLabel": "Actualizați",
+  "moreButtonTooltip": "Mai multe"
 }

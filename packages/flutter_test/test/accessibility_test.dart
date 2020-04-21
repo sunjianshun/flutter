@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -92,13 +92,17 @@ void main() {
       await tester.pumpWidget(MaterialApp(
           home: Scaffold(
             body: Center(
-              child: TextField(
-                controller: TextEditingController(text: 'this is a test'),
+              child: SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: TextEditingController(text: 'this is a test'),
+                ),
               ),
             ),
           ),
         ),
       );
+      await tester.idle();
       await expectLater(tester, meetsGuideline(textContrastGuideline));
       handle.dispose();
     });
@@ -119,11 +123,11 @@ void main() {
       final Evaluation result = await textContrastGuideline.evaluate(tester);
       expect(result.passed, false);
       expect(result.reason,
-        'SemanticsNode#21(Rect.fromLTRB(300.0, 200.0, 500.0, 400.0), label: "this is a test",'
+        'SemanticsNode#3(Rect.fromLTRB(300.0, 200.0, 500.0, 400.0), label: "this is a test",'
         ' textDirection: ltr):\nExpected contrast ratio of at least '
-        '4.5 but found 0.88 for a font size of 14.0. '
-        'The computed foreground color was: Color(0xffffeb3b), '
-        'The computed background color was: Color(0xffffff00)\n'
+        '4.5 but found 1.17 for a font size of 14.0. The '
+        'computed light color was: Color(0xfffafafa), The computed dark color was:'
+        ' Color(0xffffeb3b)\n'
         'See also: https://www.w3.org/TR/UNDERSTANDING-WCAG20/visual-audio-contrast-contrast.html');
       handle.dispose();
     });
@@ -163,7 +167,7 @@ void main() {
                   style: TextStyle(fontSize: 14.0, color: Colors.yellowAccent),
                 ),
               ),
-            )
+            ),
           ],
         )
       ));
@@ -174,6 +178,160 @@ void main() {
     });
   });
 
+  group('custom minimum contrast guideline', () {
+    Widget _icon ({IconData icon = Icons.search, Color color, Color background}) {
+      return Container(
+        padding: const EdgeInsets.all(8.0),
+        color: background,
+        child: Icon(icon, color: color),
+      );
+    }
+
+    Widget _text ({String text = 'Text', Color color, Color background}) {
+      return Container(
+        padding: const EdgeInsets.all(8.0),
+        color: background,
+        child: Text(text, style: TextStyle(color: color)),
+      );
+    }
+
+    Widget _row (List<Widget> widgets) => _boilerplate(Row(children: widgets));
+
+    final Finder _findIcons = find.byWidgetPredicate((Widget widget) => widget is Icon);
+    final Finder _findTexts = find.byWidgetPredicate((Widget widget) => widget is Text);
+    final Finder _findIconsAndTexts = find.byWidgetPredicate((Widget widget) => widget is Icon || widget is Text);
+
+    testWidgets('Black icons on white background', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.black, background: Colors.white),
+        _icon (color: Colors.black, background: Colors.white),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('Black icons on black background', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.black, background: Colors.black),
+        _icon (color: Colors.black, background: Colors.black),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('White icons on black background ("dark mode")', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.white, background: Colors.black),
+        _icon (color: Colors.white, background: Colors.black),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('Using different icons', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.black, background: Colors.white, icon: Icons.more_horiz),
+        _icon (color: Colors.black, background: Colors.white, icon: Icons.description),
+        _icon (color: Colors.black, background: Colors.white, icon: Icons.image),
+        _icon (color: Colors.black, background: Colors.white, icon: Icons.beach_access),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('One invalid instance fails entire test', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.black, background: Colors.white),
+        _icon (color: Colors.black, background: Colors.black),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('White on different colors, passing', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.white, background: Colors.red[800], icon: Icons.more_horiz),
+        _icon (color: Colors.white, background: Colors.green[800], icon: Icons.description),
+        _icon (color: Colors.white, background: Colors.blue[800], icon: Icons.image),
+        _icon (color: Colors.white, background: Colors.purple[800], icon: Icons.beach_access),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('White on different colors, failing', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.white, background: Colors.red[200], icon: Icons.more_horiz),
+        _icon (color: Colors.white, background: Colors.green[400], icon: Icons.description),
+        _icon (color: Colors.white, background: Colors.blue[600], icon: Icons.image),
+        _icon (color: Colors.white, background: Colors.purple[800], icon: Icons.beach_access),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('Absence of icons, passing', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('Absence of icons, passing - 2nd test', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _text (color: Colors.black, background: Colors.white),
+        _text (color: Colors.black, background: Colors.black),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+    });
+
+    testWidgets('Guideline ignores widgets of other types', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.black, background: Colors.white),
+        _icon (color: Colors.black, background: Colors.white),
+        _text (color: Colors.black, background: Colors.white),
+        _text (color: Colors.black, background: Colors.black),
+      ]));
+
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findTexts)));
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIconsAndTexts)));
+    });
+
+    testWidgets('Custom minimum ratio - Icons', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.blue, background: Colors.white),
+        _icon (color: Colors.black, background: Colors.white),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findIcons, minimumRatio: 3.0)));
+    });
+
+    testWidgets('Custom minimum ratio - Texts', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _text (color: Colors.blue, background: Colors.white),
+        _text (color: Colors.black, background: Colors.white),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findTexts)));
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findTexts, minimumRatio: 3.0)));
+    });
+
+    testWidgets('Custom minimum ratio - Different standards for icons and texts', (WidgetTester tester) async {
+      await tester.pumpWidget(_row(<Widget>[
+        _icon (color: Colors.blue, background: Colors.white),
+        _icon (color: Colors.black, background: Colors.white),
+        _text (color: Colors.blue, background: Colors.white),
+        _text (color: Colors.black, background: Colors.white),
+      ]));
+
+      await expectLater(tester, doesNotMeetGuideline(CustomMinimumContrastGuideline(finder: _findIcons)));
+      await expectLater(tester, meetsGuideline(CustomMinimumContrastGuideline(finder: _findTexts, minimumRatio: 3.0)));
+    });
+
+  });
+
   group('tap target size guideline', () {
     testWidgets('Tappable box at 48 by 48', (WidgetTester tester) async {
       final SemanticsHandle handle = tester.ensureSemantics();
@@ -182,7 +340,7 @@ void main() {
           width: 48.0,
           height: 48.0,
           child: GestureDetector(
-            onTap: () {},
+            onTap: () { },
           ),
         ),
       ));
@@ -197,7 +355,7 @@ void main() {
           width: 47.0,
           height: 48.0,
           child: GestureDetector(
-            onTap: () {},
+            onTap: () { },
           ),
         ),
       ));
@@ -212,7 +370,7 @@ void main() {
           width: 48.0,
           height: 47.0,
           child: GestureDetector(
-            onTap: () {},
+            onTap: () { },
           ),
         ),
       ));
@@ -229,7 +387,7 @@ void main() {
             width: 48.0,
             height: 48.0,
             child: GestureDetector(
-              onTap: () {},
+              onTap: () { },
             ),
           ),
         ),
@@ -245,14 +403,14 @@ void main() {
           width: 48.0,
           height: 47.0,
           child: GestureDetector(
-            onTap: () {},
+            onTap: () { },
           ),
         ),
       ));
       final Evaluation result = await androidTapTargetGuideline.evaluate(tester);
       expect(result.passed, false);
       expect(result.reason,
-        'SemanticsNode#41(Rect.fromLTRB(376.0, 276.5, 424.0, 323.5), actions: [tap]): expected tap '
+        'SemanticsNode#3(Rect.fromLTRB(376.0, 276.5, 424.0, 323.5), actions: [tap]): expected tap '
         'target size of at least Size(48.0, 48.0), but found Size(48.0, 47.0)\n'
         'See also: https://support.google.com/accessibility/android/answer/7101858?hl=en');
       handle.dispose();
@@ -264,7 +422,7 @@ void main() {
         width: 48.0,
         height: 47.0,
         child: GestureDetector(
-          onTap: () {},
+          onTap: () { },
         ),
       );
       await tester.pumpWidget(
@@ -347,12 +505,12 @@ void main() {
               child: Semantics(
                 container: true,
                 child: GestureDetector(
-                  onTap: () {},
+                  onTap: () { },
                   child: const SizedBox(width: 4.0, height: 4.0),
-                )
-              )
+                ),
+              ),
             ),
-          )
+          ),
         )
       ));
 
@@ -362,13 +520,13 @@ void main() {
     });
   });
 
-   group('Labeled tappable node guideline', () {
+  group('Labeled tappable node guideline', () {
     testWidgets('Passes when node is labeled', (WidgetTester tester) async {
       final SemanticsHandle handle = tester.ensureSemantics();
       await tester.pumpWidget(_boilerplate(Semantics(
         container: true,
         child: const SizedBox(width: 10.0, height: 10.0),
-        onTap: () {},
+        onTap: () { },
         label: 'test',
       )));
       final Evaluation result = await labeledTapTargetGuideline.evaluate(tester);
@@ -380,7 +538,7 @@ void main() {
       await tester.pumpWidget(_boilerplate(Semantics(
         container: true,
         child: const SizedBox(width: 10.0, height: 10.0),
-        onLongPress: () {},
+        onLongPress: () { },
         label: '',
       )));
       final Evaluation result = await labeledTapTargetGuideline.evaluate(tester);
@@ -393,7 +551,7 @@ void main() {
       await tester.pumpWidget(_boilerplate(Semantics(
         container: true,
         child: const SizedBox(width: 10.0, height: 10.0),
-        onTap: () {},
+        onTap: () { },
         label: '',
       )));
       final Evaluation result = await labeledTapTargetGuideline.evaluate(tester);
@@ -405,7 +563,7 @@ void main() {
       final SemanticsHandle handle = tester.ensureSemantics();
       await tester.pumpWidget(_boilerplate(Semantics(
         container: true,
-        onLongPress: () {},
+        onLongPress: () { },
         label: '',
         child: Semantics(
           label: 'test',
@@ -418,6 +576,24 @@ void main() {
     });
   });
 
+  testWidgets('regression test for material widget', (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData.light(),
+        home: Scaffold(
+          backgroundColor: Colors.white,
+          body: RaisedButton(
+            color: const Color(0xFFFBBC04),
+            elevation: 0,
+            onPressed: () {},
+            child: const Text('Button', style: TextStyle(color: Colors.black)),
+        ),
+      ),
+    ));
+    await expectLater(tester, meetsGuideline(textContrastGuideline));
+    handle.dispose();
+  });
 }
 
 Widget _boilerplate(Widget child) {

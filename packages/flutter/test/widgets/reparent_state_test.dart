@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,21 +59,21 @@ void main() {
         textDirection: TextDirection.ltr,
         children: <Widget>[
           Container(
-            child: StateMarker(key: left)
+            child: StateMarker(key: left),
           ),
           Container(
             child: StateMarker(
               key: right,
-              child: grandchild
-            )
+              child: grandchild,
+            ),
           ),
-        ]
-      )
+        ],
+      ),
     );
 
-    final StateMarkerState leftState = left.currentState;
+    final StateMarkerState leftState = left.currentState as StateMarkerState;
     leftState.marker = 'left';
-    final StateMarkerState rightState = right.currentState;
+    final StateMarkerState rightState = right.currentState as StateMarkerState;
     rightState.marker = 'right';
 
     final StateMarkerState grandchildState = tester.state(find.byWidget(grandchild));
@@ -88,14 +88,14 @@ void main() {
           Container(
             child: StateMarker(
               key: right,
-              child: newGrandchild
-            )
+              child: newGrandchild,
+            ),
           ),
           Container(
-            child: StateMarker(key: left)
+            child: StateMarker(key: left),
           ),
-        ]
-      )
+        ],
+      ),
     );
 
     expect(left.currentState, equals(leftState));
@@ -113,10 +113,10 @@ void main() {
         child: Container(
           child: StateMarker(
             key: left,
-            child: Container()
-          )
-        )
-      )
+            child: Container(),
+          ),
+        ),
+      ),
     );
 
     expect(left.currentState, equals(leftState));
@@ -136,15 +136,15 @@ void main() {
           StateMarker(key: left),
           StateMarker(
             key: right,
-            child: grandchild
-          )
-        ]
-      )
+            child: grandchild,
+          ),
+        ],
+      ),
     );
 
-    final StateMarkerState leftState = left.currentState;
+    final StateMarkerState leftState = left.currentState as StateMarkerState;
     leftState.marker = 'left';
-    final StateMarkerState rightState = right.currentState;
+    final StateMarkerState rightState = right.currentState as StateMarkerState;
     rightState.marker = 'right';
 
     final StateMarkerState grandchildState = tester.state(find.byWidget(grandchild));
@@ -158,11 +158,11 @@ void main() {
         children: <Widget>[
           StateMarker(
             key: right,
-            child: newGrandchild
+            child: newGrandchild,
           ),
-          StateMarker(key: left)
-        ]
-      )
+          StateMarker(key: left),
+        ],
+      ),
     );
 
     expect(left.currentState, equals(leftState));
@@ -180,10 +180,10 @@ void main() {
         child: Container(
           child: StateMarker(
             key: left,
-            child: Container()
-          )
-        )
-      )
+            child: Container(),
+          ),
+        ),
+      ),
     );
 
     expect(left.currentState, equals(leftState));
@@ -196,7 +196,7 @@ void main() {
 
     await tester.pumpWidget(StateMarker(key: key));
 
-    final StateMarkerState keyState = key.currentState;
+    final StateMarkerState keyState = key.currentState as StateMarkerState;
     keyState.marker = 'marked';
 
     await tester.pumpWidget(
@@ -231,19 +231,19 @@ void main() {
       textDirection: TextDirection.ltr,
       children: <Widget>[
         StateMarker(key: key),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
-    final StateMarkerState keyState = key.currentState;
+    final StateMarkerState keyState = key.currentState as StateMarkerState;
     keyState.marker = 'marked';
 
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        Container(width: 100.0, height: 100.0),
+        const SizedBox(width: 100.0, height: 100.0),
         StateMarker(key: key),
-      ]
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -253,8 +253,8 @@ void main() {
       textDirection: TextDirection.ltr,
       children: <Widget>[
         StateMarker(key: key),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -267,21 +267,21 @@ void main() {
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        Container(width: 100.0, height: 100.0),
+        const SizedBox(width: 100.0, height: 100.0),
         StateMarker(key: key),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
-    final StateMarkerState keyState = key.currentState;
+    final StateMarkerState keyState = key.currentState as StateMarkerState;
     keyState.marker = 'marked';
 
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
         Container(width: 100.0, height: 100.0, child: StateMarker(key: key)),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -290,10 +290,10 @@ void main() {
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        Container(width: 100.0, height: 100.0),
+        const SizedBox(width: 100.0, height: 100.0),
         StateMarker(key: key),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -302,9 +302,9 @@ void main() {
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        Container(width: 100.0, height: 100.0),
+        const SizedBox(width: 100.0, height: 100.0),
         Container(width: 100.0, height: 100.0, child: StateMarker(key: key)),
-      ]
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -313,10 +313,10 @@ void main() {
     await tester.pumpWidget(Stack(
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        Container(width: 100.0, height: 100.0),
+        const SizedBox(width: 100.0, height: 100.0),
         StateMarker(key: key),
-        Container(width: 100.0, height: 100.0),
-      ]
+        const SizedBox(width: 100.0, height: 100.0),
+      ],
     ));
 
     expect(key.currentState, equals(keyState));
@@ -360,12 +360,12 @@ void main() {
               key: key2,
               child: StateMarker(
                 key: key3,
-                child: StateMarker(child: Container(width: 100.0))
-              )
-            )
-          )
-        ]
-      )
+                child: StateMarker(child: Container(width: 100.0)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
 
     await tester.pumpWidget(
@@ -374,17 +374,17 @@ void main() {
         children: <Widget>[
           StateMarker(
             key: key2,
-            child: StateMarker(child: Container(width: 100.0))
+            child: StateMarker(child: Container(width: 100.0)),
           ),
           StateMarker(
             key: key1,
             child: StateMarker(
               key: key3,
-              child: StateMarker(child: Container(width: 100.0))
-            )
+              child: StateMarker(child: Container(width: 100.0)),
+            ),
           ),
-        ]
-      )
+        ],
+      ),
     );
   });
 }

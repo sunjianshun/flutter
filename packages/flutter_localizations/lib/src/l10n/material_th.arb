@@ -50,5 +50,7 @@
   "collapsedIconTapHint": "ขยาย",
   "remainingTextFieldCharacterCountZero": "TBD",
   "remainingTextFieldCharacterCountOne": "เหลือ 1 อักขระ",
-  "remainingTextFieldCharacterCountOther": "เหลือ $remainingCount อักขระ"
+  "remainingTextFieldCharacterCountOther": "เหลือ $remainingCount อักขระ",
+  "refreshIndicatorSemanticLabel": "รีเฟรช",
+  "moreButtonTooltip": "เพิ่มเติม"
 }

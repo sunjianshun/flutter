@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ void main() {
 
     await tester.pumpWidget(
       const Center(
-          child: Text('Hello!', textDirection: TextDirection.ltr)
+          child: Text('Hello!', textDirection: TextDirection.ltr),
       ),
     );
 
@@ -27,9 +27,9 @@ void main() {
           id: 1,
           label: 'Hello!',
           textDirection: TextDirection.ltr,
-          rect: Rect.fromLTRB(0.0, 0.0, 84.0, 14.0),
+          rect: const Rect.fromLTRB(0.0, 0.0, 84.0, 14.0),
           transform: Matrix4.translationValues(358.0, 293.0, 0.0),
-        )
+        ),
       ],
     )));
 
@@ -44,7 +44,7 @@ void main() {
       home: Center(
         child: Semantics(
           label: 'Hello!',
-          child: Container(
+          child: const SizedBox(
             width: 10.0,
             height: 10.0,
           ),
@@ -55,21 +55,21 @@ void main() {
     expect(semantics, hasSemantics(TestSemantics.root(
       children: <TestSemantics>[
         TestSemantics.rootChild(
-          id: 2,
-          rect: Rect.fromLTWH(0.0, 0.0, 800.0, 600.0),
+          id: 1,
+          rect: const Rect.fromLTWH(0.0, 0.0, 800.0, 600.0),
           children: <TestSemantics>[
             TestSemantics(
-              id: 3,
-              rect: Rect.fromLTWH(0.0, 0.0, 800.0, 600.0),
+              id: 2,
+              rect: const Rect.fromLTWH(0.0, 0.0, 800.0, 600.0),
               flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
               children: <TestSemantics>[
                 TestSemantics(
-                  id: 4,
+                  id: 3,
                   label: 'Hello!',
                   textDirection: TextDirection.ltr,
-                  rect: Rect.fromLTRB(0.0, 0.0, 10.0, 10.0),
+                  rect: const Rect.fromLTRB(0.0, 0.0, 10.0, 10.0),
                   transform: Matrix4.translationValues(395.0, 295.0, 0.0),
-                )
+                ),
               ],
             ),
           ],

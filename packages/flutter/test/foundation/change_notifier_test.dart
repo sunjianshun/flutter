@@ -1,4 +1,4 @@
- // Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@ class TestNotifier extends ChangeNotifier {
   void notify() {
     notifyListeners();
   }
+
+  bool get isListenedTo => hasListeners;
 }
 
 class HasListenersTester<T> extends ValueNotifier<T> {
@@ -35,7 +37,10 @@ void main() {
     final VoidCallback listener = () { log.add('listener'); };
     final VoidCallback listener1 = () { log.add('listener1'); };
     final VoidCallback listener2 = () { log.add('listener2'); };
-    final VoidCallback badListener = () { log.add('badListener'); throw null; };
+    final VoidCallback badListener = () {
+      log.add('badListener');
+      throw null;
+    };
 
     final TestNotifier test = TestNotifier();
 
@@ -180,12 +185,12 @@ void main() {
     log.clear();
   });
 
-  test('Can dispose merged notifier', () {
+  test('Can remove from merged notifier', () {
     final TestNotifier source1 = TestNotifier();
     final TestNotifier source2 = TestNotifier();
     final List<String> log = <String>[];
 
-    final ChangeNotifier merged = Listenable.merge(<Listenable>[source1, source2]);
+    final Listenable merged = Listenable.merge(<Listenable>[source1, source2]);
     final VoidCallback listener = () { log.add('listener'); };
 
     merged.addListener(listener);
@@ -193,8 +198,8 @@ void main() {
     source2.notify();
     expect(log, <String>['listener', 'listener']);
     log.clear();
-    merged.dispose();
 
+    merged.removeListener(listener);
     source1.notify();
     source2.notify();
     expect(log, isEmpty);
@@ -229,7 +234,7 @@ void main() {
     final TestNotifier source1 = TestNotifier();
     final TestNotifier source2 = TestNotifier();
 
-    ChangeNotifier listenableUnderTest = Listenable.merge(<Listenable>[]);
+    Listenable listenableUnderTest = Listenable.merge(<Listenable>[]);
     expect(listenableUnderTest.toString(), 'Listenable.merge([])');
 
     listenableUnderTest = Listenable.merge(<Listenable>[null]);
@@ -253,6 +258,26 @@ void main() {
       "Listenable.merge([null, Instance of 'TestNotifier'])",
     );
   });
+
+  test('Listenable.merge does not leak', () {
+    // Regression test for https://github.com/flutter/flutter/issues/25163.
+
+    final TestNotifier source1 = TestNotifier();
+    final TestNotifier source2 = TestNotifier();
+    final VoidCallback fakeListener = () { };
+
+    final Listenable listenableUnderTest = Listenable.merge(<Listenable>[source1, source2]);
+    expect(source1.isListenedTo, isFalse);
+    expect(source2.isListenedTo, isFalse);
+    listenableUnderTest.addListener(fakeListener);
+    expect(source1.isListenedTo, isTrue);
+    expect(source2.isListenedTo, isTrue);
+
+    listenableUnderTest.removeListener(fakeListener);
+    expect(source1.isListenedTo, isFalse);
+    expect(source2.isListenedTo, isFalse);
+  });
+
 
   test('hasListeners', () {
     final HasListenersTester<bool> notifier = HasListenersTester<bool>(true);
@@ -290,4 +315,24 @@ void main() {
     expect(b.result, isTrue);
     expect(notifications, 1);
   });
+
+  test('Throws FlutterError when disposed and called', () {
+    final TestNotifier testNotifier = TestNotifier();
+    testNotifier.dispose();
+    FlutterError error;
+    try {
+      testNotifier.dispose();
+    } on FlutterError catch (e) {
+      error = e;
+    }
+    expect(error, isNotNull);
+    expect(error, isFlutterError);
+    expect(error.toStringDeep(), equalsIgnoringHashCodes(
+      'FlutterError\n'
+      '   A TestNotifier was used after being disposed.\n'
+      '   Once you have called dispose() on a TestNotifier, it can no\n'
+      '   longer be used.\n'
+    ));
+  });
+
 }

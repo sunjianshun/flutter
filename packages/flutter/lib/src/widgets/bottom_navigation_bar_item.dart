@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@ import 'framework.dart';
 /// An interactive button within either material's [BottomNavigationBar]
 /// or the iOS themed [CupertinoTabBar] with an icon and title.
 ///
-/// This class is rarely used in isolation. Commonly embedded in one of the
-/// bottom navigation widgets above.
+/// This class is rarely used in isolation. It is typically embedded in one of
+/// the bottom navigation widgets above.
 ///
 /// See also:
 ///
 ///  * [BottomNavigationBar]
-///  * <https://material.google.com/components/bottom-navigation.html>
+///  * <https://material.io/design/components/bottom-navigation.html>
 ///  * [CupertinoTabBar]
 ///  * <https://developer.apple.com/ios/human-interface-guidelines/bars/tab-bars>
 class BottomNavigationBarItem {
@@ -57,7 +57,7 @@ class BottomNavigationBarItem {
   ///
   /// See also:
   ///
-  ///   * [BottomNavigationBarItem.icon], for a description of how to pair icons.
+  ///  * [BottomNavigationBarItem.icon], for a description of how to pair icons.
   final Widget activeIcon;
 
   /// The title of the item. If the title is not provided only the icon will be shown when not used in a Material Design [BottomNavigationBar].
@@ -67,7 +67,7 @@ class BottomNavigationBarItem {
   ///
   /// If the navigation bar's type is [BottomNavigationBarType.shifting], then
   /// the entire bar is flooded with the [backgroundColor] when this item is
-  /// tapped.
+  /// tapped. This will override [BottomNavigationBar.backgroundColor].
   ///
   /// Not used for [CupertinoTabBar]. Control the invariant bar color directly
   /// via [CupertinoTabBar.backgroundColor].
@@ -75,6 +75,6 @@ class BottomNavigationBarItem {
   /// See also:
   ///
   ///  * [Icon.color] and [ImageIcon.color] to control the foreground color of
-  ///     the icons themselves.
+  ///    the icons themselves.
   final Color backgroundColor;
 }

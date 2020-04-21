@@ -1,6 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+// Examples can assume:
+// class Cat { }
 
 /// A category with which to annotate a class, for documentation
 /// purposes.
@@ -13,7 +16,7 @@
 ///
 /// A class can have multiple categories.
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// ```dart
 /// /// A copper coffee pot, as desired by Ben Turpin.
@@ -26,6 +29,7 @@
 ///   // ...code...
 /// }
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///
@@ -50,7 +54,7 @@ class Category {
 ///
 /// Each class should only have one [DocumentationIcon].
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// ```dart
 /// /// Utility class for beginning a dream-sharing sequence.
@@ -61,6 +65,7 @@ class Category {
 ///   // ...code...
 /// }
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///
@@ -82,7 +87,7 @@ class DocumentationIcon {
 /// for this purpose, but on occasion the first paragraph is either too short
 /// or too long for use in isolation, without the remainder of the documentation.
 ///
-/// ## Sample code
+/// {@tool snippet}
 ///
 /// ```dart
 /// /// A famous cat.
@@ -97,6 +102,7 @@ class DocumentationIcon {
 ///   // ...code...
 /// }
 /// ```
+/// {@end-tool}
 ///
 /// See also:
 ///

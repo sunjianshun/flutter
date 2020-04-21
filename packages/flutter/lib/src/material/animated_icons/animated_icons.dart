@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,9 @@ part of material_animated_icons;
 ///
 /// The available icons are specified in [AnimatedIcons].
 ///
-/// ### Sample code
+/// {@youtube 560 315 https://www.youtube.com/watch?v=pJcbh8pbvJs}
+///
+/// {@tool snippet}
 ///
 /// ```dart
 /// AnimatedIcon(
@@ -25,6 +27,7 @@ part of material_animated_icons;
 ///   semanticLabel: 'Show menu',
 /// )
 /// ```
+/// {@end-tool}
 ///
 class AnimatedIcon extends StatelessWidget {
 
@@ -101,7 +104,7 @@ class AnimatedIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final _AnimatedIconData iconData = icon;
+    final _AnimatedIconData iconData = icon as _AnimatedIconData;
     final IconThemeData iconTheme = IconTheme.of(context);
     final double iconSize = size ?? iconTheme.size;
     final TextDirection textDirection = this.textDirection ?? Directionality.of(context);
@@ -158,8 +161,8 @@ class _AnimatedIconPainter extends CustomPainter {
       canvas.translate(-size.width, -size.height);
     }
 
-    final double clampedProgress = progress.value.clamp(0.0, 1.0);
-    for (_PathFrames path in paths)
+    final double clampedProgress = progress.value.clamp(0.0, 1.0) as double;
+    for (final _PathFrames path in paths)
       path.paint(canvas, color, uiPathFactory, clampedProgress);
   }
 
@@ -188,7 +191,7 @@ class _AnimatedIconPainter extends CustomPainter {
 class _PathFrames {
   const _PathFrames({
     @required this.commands,
-    @required this.opacities
+    @required this.opacities,
   });
 
   final List<_PathCommand> commands;
@@ -200,7 +203,7 @@ class _PathFrames {
       ..style = PaintingStyle.fill
       ..color = color.withOpacity(color.opacity * opacity);
     final ui.Path path = uiPathFactory();
-    for (_PathCommand command in commands)
+    for (final _PathCommand command in commands)
       command.apply(path, progress);
     canvas.drawPath(path, paint);
   }
@@ -247,7 +250,7 @@ class _PathCubicTo extends _PathCommand {
     path.cubicTo(
       controlPoint1.dx, controlPoint1.dy,
       controlPoint2.dx, controlPoint2.dy,
-      targetPoint.dx, targetPoint.dy
+      targetPoint.dx, targetPoint.dy,
     );
   }
 }

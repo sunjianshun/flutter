@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -263,7 +263,7 @@ void main() {
     expect(box2.localToGlobal(Offset.zero), const Offset(325.0, 175.0));
   });
 
-  Widget crossFadeWithWatcher({bool towardsSecond = false}) {
+  Widget crossFadeWithWatcher({ bool towardsSecond = false }) {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: AnimatedCrossFade(
@@ -376,7 +376,7 @@ class _TickerWatchingWidgetState extends State<_TickerWatchingWidget> with Singl
   @override
   void initState() {
     super.initState();
-    ticker = createTicker((_) {})..start();
+    ticker = createTicker((_) { })..start();
   }
 
   @override

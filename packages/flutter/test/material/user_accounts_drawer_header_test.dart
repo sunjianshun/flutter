@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,8 @@ const Key avatarA = Key('A');
 const Key avatarC = Key('C');
 const Key avatarD = Key('D');
 
-Future<void> pumpTestWidget(WidgetTester tester, {
+Future<void> pumpTestWidget(
+  WidgetTester tester, {
   bool withName = true,
   bool withEmail = true,
   bool withOnDetailsPressedHandler = true,
@@ -31,7 +32,7 @@ Future<void> pumpTestWidget(WidgetTester tester, {
         child: Material(
           child: Center(
             child: UserAccountsDrawerHeader(
-              onDetailsPressed: withOnDetailsPressedHandler ? () {} : null,
+              onDetailsPressed: withOnDetailsPressedHandler ? () { } : null,
               currentAccountPicture: const ExcludeSemantics(
                 child: CircleAvatar(
                   key: avatarA,
@@ -52,7 +53,7 @@ Future<void> pumpTestWidget(WidgetTester tester, {
                 ),
                 CircleAvatar(
                   child: Text('E'),
-                )
+                ),
               ],
               accountName: withName ? const Text('name') : null,
               accountEmail: withEmail ? const Text('email') : null,
@@ -103,6 +104,148 @@ void main() {
     expect(avatarDTopRight.dx - avatarCTopRight.dx, equals(40.0 + 16.0)); // size + space between
   });
 
+  testWidgets('UserAccountsDrawerHeader icon rotation test', (WidgetTester tester) async {
+    await pumpTestWidget(tester);
+    Transform transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon is right side up.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    await tester.pumpAndSettle();
+    await tester.pump();
+    transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon has rotated 180 degrees.
+    expect(transformWidget.transform.getRotation()[0], -1.0);
+    expect(transformWidget.transform.getRotation()[4], -1.0);
+
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    await tester.pumpAndSettle();
+    await tester.pump();
+    transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon has rotated 180 degrees back to the original position.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+  });
+
+  // Regression test for https://github.com/flutter/flutter/issues/25801.
+  testWidgets('UserAccountsDrawerHeader icon does not rotate after setState', (WidgetTester tester) async {
+    StateSetter testSetState;
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            testSetState = setState;
+            return UserAccountsDrawerHeader(
+              onDetailsPressed: () { },
+              accountName: const Text('name'),
+              accountEmail: const Text('email'),
+            );
+          },
+        ),
+      ),
+    ));
+
+    Transform transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon is right side up.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+
+    testSetState(() { });
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(tester.hasRunningAnimations, isFalse);
+
+    expect(await tester.pumpAndSettle(), 1);
+    transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon has not rotated.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+  });
+
+  testWidgets('UserAccountsDrawerHeader icon rotation test speeeeeedy', (WidgetTester tester) async {
+    await pumpTestWidget(tester);
+    Transform transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon is right side up.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+
+    // Icon starts to rotate down.
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    // Icon starts to rotate up mid animation.
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    // Icon starts to rotate down again still mid animation.
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    // Icon starts to rotate up to its original position mid animation.
+    await tester.tap(find.byType(Icon));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.hasRunningAnimations, isTrue);
+
+    await tester.pumpAndSettle();
+    await tester.pump();
+    transformWidget = tester.firstWidget(find.byType(Transform));
+
+    // Icon has rotated 180 degrees back to the original position.
+    expect(transformWidget.transform.getRotation()[0], 1.0);
+    expect(transformWidget.transform.getRotation()[4], 1.0);
+  });
+
+  testWidgets('UserAccountsDrawerHeader icon color changes', (WidgetTester tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: UserAccountsDrawerHeader(
+          onDetailsPressed: () {},
+          accountName: const Text('name'),
+          accountEmail: const Text('email'),
+        ),
+      ),
+    ));
+
+    Icon iconWidget = tester.firstWidget(find.byType(Icon));
+    // Default icon color is white.
+    expect(iconWidget.color, Colors.white);
+
+    const Color arrowColor = Colors.red;
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: UserAccountsDrawerHeader(
+          onDetailsPressed: () { },
+          accountName: const Text('name'),
+          accountEmail: const Text('email'),
+          arrowColor: arrowColor,
+        ),
+      ),
+    ));
+
+    iconWidget = tester.firstWidget(find.byType(Icon));
+    expect(iconWidget.color, arrowColor);
+  });
 
   testWidgets('UserAccountsDrawerHeader null parameters LTR', (WidgetTester tester) async {
     Widget buildFrame({
@@ -145,11 +288,11 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountName')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountName')).dx,
-      lessThan(tester.getCenter(find.byType(Icon)).dx)
+      lessThan(tester.getCenter(find.byType(Icon)).dx),
     );
 
     await tester.pumpWidget(buildFrame(
@@ -158,11 +301,11 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountEmail')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountEmail')).dx,
-      lessThan(tester.getCenter(find.byType(Icon)).dx)
+      lessThan(tester.getCenter(find.byType(Icon)).dx),
     );
 
     await tester.pumpWidget(buildFrame(
@@ -172,19 +315,19 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountEmail')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountEmail')).dx,
-      lessThan(tester.getCenter(find.byType(Icon)).dx)
+      lessThan(tester.getCenter(find.byType(Icon)).dx),
     );
     expect(
       tester.getBottomLeft(find.text('accountEmail')).dy,
-      greaterThan(tester.getBottomLeft(find.text('accountName')).dy)
+      greaterThan(tester.getBottomLeft(find.text('accountName')).dy),
     );
     expect(
       tester.getBottomLeft(find.text('accountEmail')).dx,
-      tester.getBottomLeft(find.text('accountName')).dx
+      tester.getBottomLeft(find.text('accountName')).dx,
     );
 
     await tester.pumpWidget(buildFrame(
@@ -204,11 +347,11 @@ void main() {
     ));
     expect(
       tester.getBottomLeft(find.byKey(avatarA)).dx,
-      tester.getBottomLeft(find.text('accountName')).dx
+      tester.getBottomLeft(find.text('accountName')).dx,
     );
     expect(
       tester.getBottomLeft(find.text('accountName')).dy,
-      greaterThan(tester.getBottomLeft(find.byKey(avatarA)).dy)
+      greaterThan(tester.getBottomLeft(find.byKey(avatarA)).dy),
     );
   });
 
@@ -256,11 +399,11 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountName')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountName')).dx,
-      greaterThan(tester.getCenter(find.byType(Icon)).dx)
+      greaterThan(tester.getCenter(find.byType(Icon)).dx),
     );
 
     await tester.pumpWidget(buildFrame(
@@ -269,11 +412,11 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountEmail')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountEmail')).dx,
-      greaterThan(tester.getCenter(find.byType(Icon)).dx)
+      greaterThan(tester.getCenter(find.byType(Icon)).dx),
     );
 
     await tester.pumpWidget(buildFrame(
@@ -283,19 +426,19 @@ void main() {
     ));
     expect(
       tester.getCenter(find.text('accountEmail')).dy,
-      tester.getCenter(find.byType(Icon)).dy
+      tester.getCenter(find.byType(Icon)).dy,
     );
     expect(
       tester.getCenter(find.text('accountEmail')).dx,
-      greaterThan(tester.getCenter(find.byType(Icon)).dx)
+      greaterThan(tester.getCenter(find.byType(Icon)).dx),
     );
     expect(
       tester.getBottomLeft(find.text('accountEmail')).dy,
-      greaterThan(tester.getBottomLeft(find.text('accountName')).dy)
+      greaterThan(tester.getBottomLeft(find.text('accountName')).dy),
     );
     expect(
       tester.getBottomRight(find.text('accountEmail')).dx,
-      tester.getBottomRight(find.text('accountName')).dx
+      tester.getBottomRight(find.text('accountName')).dx,
     );
 
     await tester.pumpWidget(buildFrame(
@@ -315,11 +458,11 @@ void main() {
     ));
     expect(
       tester.getBottomRight(find.byKey(avatarA)).dx,
-      tester.getBottomRight(find.text('accountName')).dx
+      tester.getBottomRight(find.text('accountName')).dx,
     );
     expect(
       tester.getBottomLeft(find.text('accountName')).dy,
-      greaterThan(tester.getBottomLeft(find.byKey(avatarA)).dy)
+      greaterThan(tester.getBottomLeft(find.byKey(avatarA)).dy),
     );
   });
 
@@ -338,6 +481,7 @@ void main() {
                   flags: <SemanticsFlag>[SemanticsFlag.scopesRoute],
                   children: <TestSemantics>[
                     TestSemantics(
+                      flags: <SemanticsFlag>[SemanticsFlag.isFocusable],
                       label: 'Signed in\nname\nemail',
                       textDirection: TextDirection.ltr,
                       children: <TestSemantics>[

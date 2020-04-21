@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -48,7 +49,7 @@ class _IgnoreDrag extends Drag {
 class _PointDemoPainter extends CustomPainter {
   _PointDemoPainter({
     Animation<double> repaint,
-    this.arc
+    this.arc,
   }) : _repaint = repaint, super(repaint: repaint);
 
   final MaterialPointArcTween arc;
@@ -137,7 +138,7 @@ class _PointDemoState extends State<_PointDemo> {
     if (_dragTarget != null)
       return _IgnoreDrag();
 
-    final RenderBox box = _painterKey.currentContext.findRenderObject();
+    final RenderBox box = _painterKey.currentContext.findRenderObject() as RenderBox;
     final double startOffset = (box.localToGlobal(_begin) - position).distanceSquared;
     final double endOffset = (box.localToGlobal(_end) - position).distanceSquared;
     setState(() {
@@ -192,8 +193,7 @@ class _PointDemoState extends State<_PointDemo> {
         ImmediateMultiDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<ImmediateMultiDragGestureRecognizer>(
           () => ImmediateMultiDragGestureRecognizer(),
           (ImmediateMultiDragGestureRecognizer instance) {
-            instance
-              ..onStart = _handleOnStart;
+            instance.onStart = _handleOnStart;
           },
         ),
       },
@@ -202,7 +202,7 @@ class _PointDemoState extends State<_PointDemo> {
           key: _painterKey,
           foregroundPainter: _PointDemoPainter(
             repaint: _animation,
-            arc: arc
+            arc: arc,
           ),
           // Watch out: if this IgnorePointer is left out, then gestures that
           // fail _PointDemoPainter.hitTest() will still be recognized because
@@ -213,12 +213,12 @@ class _PointDemoState extends State<_PointDemo> {
               child: Text(
                 'Tap the refresh button to run the animation. Drag the green '
                 "and red points to change the animation's path.",
-                style: Theme.of(context).textTheme.caption.copyWith(fontSize: 16.0)
-              )
-            )
-          )
-        )
-      )
+                style: Theme.of(context).textTheme.caption.copyWith(fontSize: 16.0),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -226,7 +226,7 @@ class _PointDemoState extends State<_PointDemo> {
 class _RectangleDemoPainter extends CustomPainter {
   _RectangleDemoPainter({
     Animation<double> repaint,
-    this.arc
+    this.arc,
   }) : _repaint = repaint, super(repaint: repaint);
 
   final MaterialRectArcTween arc;
@@ -305,7 +305,7 @@ class _RectangleDemoState extends State<_RectangleDemo> {
     if (_dragTarget != null)
       return _IgnoreDrag();
 
-    final RenderBox box = _painterKey.currentContext.findRenderObject();
+    final RenderBox box = _painterKey.currentContext.findRenderObject() as RenderBox;
     final double startOffset = (box.localToGlobal(_begin.center) - position).distanceSquared;
     final double endOffset = (box.localToGlobal(_end.center) - position).distanceSquared;
     setState(() {
@@ -350,11 +350,11 @@ class _RectangleDemoState extends State<_RectangleDemo> {
       _screenSize = screenSize;
       _begin = Rect.fromLTWH(
         screenSize.width * 0.5, screenSize.height * 0.2,
-        screenSize.width * 0.4, screenSize.height * 0.2
+        screenSize.width * 0.4, screenSize.height * 0.2,
       );
       _end = Rect.fromLTWH(
         screenSize.width * 0.1, screenSize.height * 0.4,
-        screenSize.width * 0.3, screenSize.height * 0.3
+        screenSize.width * 0.3, screenSize.height * 0.3,
       );
     }
 
@@ -365,8 +365,7 @@ class _RectangleDemoState extends State<_RectangleDemo> {
         ImmediateMultiDragGestureRecognizer: GestureRecognizerFactoryWithHandlers<ImmediateMultiDragGestureRecognizer>(
           () => ImmediateMultiDragGestureRecognizer(),
           (ImmediateMultiDragGestureRecognizer instance) {
-            instance
-              ..onStart = _handleOnStart;
+            instance.onStart = _handleOnStart;
           },
         ),
       },
@@ -375,7 +374,7 @@ class _RectangleDemoState extends State<_RectangleDemo> {
           key: _painterKey,
           foregroundPainter: _RectangleDemoPainter(
             repaint: _animation,
-            arc: arc
+            arc: arc,
           ),
           // Watch out: if this IgnorePointer is left out, then gestures that
           // fail _RectDemoPainter.hitTest() will still be recognized because
@@ -386,12 +385,12 @@ class _RectangleDemoState extends State<_RectangleDemo> {
               child: Text(
                 'Tap the refresh button to run the animation. Drag the rectangles '
                 "to change the animation's path.",
-                style: Theme.of(context).textTheme.caption.copyWith(fontSize: 16.0)
-              )
-            )
-          )
-        )
-      )
+                style: Theme.of(context).textTheme.caption.copyWith(fontSize: 16.0),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -426,13 +425,13 @@ class _AnimationDemoState extends State<AnimationDemo> with TickerProviderStateM
       _ArcDemo('POINT', (_ArcDemo demo) {
         return _PointDemo(
           key: demo.key,
-          controller: demo.controller
+          controller: demo.controller,
         );
       }, this),
       _ArcDemo('RECTANGLE', (_ArcDemo demo) {
         return _RectangleDemo(
           key: demo.key,
-          controller: demo.controller
+          controller: demo.controller,
         );
       }, this),
     ];
@@ -466,9 +465,9 @@ class _AnimationDemoState extends State<AnimationDemo> with TickerProviderStateM
           },
         ),
         body: TabBarView(
-          children: _allDemos.map<Widget>((_ArcDemo demo) => demo.builder(demo)).toList()
-        )
-      )
+          children: _allDemos.map<Widget>((_ArcDemo demo) => demo.builder(demo)).toList(),
+        ),
+      ),
     );
   }
 }

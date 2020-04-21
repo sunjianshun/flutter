@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,10 @@ Future<void> main() async {
     await tester.pumpWidget(
       MaterialApp(
         home: Image(image: fakeImageProvider, excludeFromSemantics: true, key: imageKey),
-        routes: <String, WidgetBuilder> {
-          '/page': (BuildContext context) => Container()
-        }
-      )
+        routes: <String, WidgetBuilder>{
+          '/page': (BuildContext context) => Container(),
+        },
+      ),
     );
     final RenderImage renderImage = tester.renderObject(find.byType(Image));
     final ui.Image image1 = renderImage.image;

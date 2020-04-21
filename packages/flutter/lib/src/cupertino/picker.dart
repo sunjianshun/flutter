@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,24 +7,41 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'colors.dart';
+import 'theme.dart';
+
 /// Color of the 'magnifier' lens border.
-const Color _kHighlighterBorder = Color(0xFF7F7F7F);
-const Color _kDefaultBackground = Color(0xFFD2D4DB);
-// Eyeballed values comparing with a native picker.
-// Values closer to PI produces denser flatter lists.
-const double _kDefaultDiameterRatio = 1.35;
-const double _kDefaultPerspective = 0.004;
-/// Opacity fraction value that hides the wheel above and below the 'magnifier'
-/// lens with the same color as the background.
-const double _kForegroundScreenOpacityFraction = 0.7;
+const Color _kHighlighterBorder = CupertinoDynamicColor.withBrightness(
+  color: Color(0x33000000),
+  darkColor: Color(0x33FFFFFF),
+);
+// Eyeballed values comparing with a native picker to produce the right
+// curvatures and densities.
+const double _kDefaultDiameterRatio = 1.07;
+const double _kDefaultPerspective = 0.003;
+const double _kSqueeze = 1.45;
+
+// Opacity fraction value that dims the wheel above and below the "magnifier"
+// lens.
+const double _kOverAndUnderCenterOpacity = 0.447;
 
 /// An iOS-styled picker.
 ///
 /// Displays its children widgets on a wheel for selection and
 /// calls back when the currently selected item changes.
 ///
-/// Can be used with [showModalBottomSheet] to display the picker modally at the
-/// bottom of the screen.
+/// By default, the first child in `children` will be the initially selected child.
+/// The index of a different child can be specified in [scrollController], to make
+/// that child the initially selected child.
+///
+/// Can be used with [showCupertinoModalPopup] to display the picker modally at the
+/// bottom of the screen. When calling [showCupertinoModalPopup], be sure to set
+/// `semanticsDismissible` to true to enable dismissing the modal via semantics.
+///
+/// Sizes itself to its parent. All children are sized to the same size based
+/// on [itemExtent].
+///
+/// By default, descendent texts are shown with [CupertinoTextThemeData.pickerTextStyle].
 ///
 /// See also:
 ///
@@ -37,9 +54,14 @@ class CupertinoPicker extends StatefulWidget {
   /// The [diameterRatio] and [itemExtent] arguments must not be null. The
   /// [itemExtent] must be greater than zero.
   ///
-  /// The [backgroundColor] defaults to light gray. It can be set to null to
-  /// disable the background painting entirely; this is mildly more efficient
-  /// than using [Colors.transparent].
+  /// The [backgroundColor] defaults to null, which disables background painting entirely.
+  /// (i.e. the picker is going to have a completely transparent background), to match
+  /// the native UIPicker and UIDatePicker. Also, if it has transparency, no gradient
+  /// effect will be rendered.
+  ///
+  /// The [scrollController] argument can be used to specify a custom
+  /// [FixedExtentScrollController] for programmatically reading or changing
+  /// the current picker index or for selecting an initial index value.
   ///
   /// The [looping] argument decides whether the child list loops and can be
   /// scrolled infinitely.  If set to true, scrolling past the end of the list
@@ -48,11 +70,12 @@ class CupertinoPicker extends StatefulWidget {
   CupertinoPicker({
     Key key,
     this.diameterRatio = _kDefaultDiameterRatio,
-    this.backgroundColor = _kDefaultBackground,
+    this.backgroundColor,
     this.offAxisFraction = 0.0,
     this.useMagnifier = false,
     this.magnification = 1.0,
     this.scrollController,
+    this.squeeze = _kSqueeze,
     @required this.itemExtent,
     @required this.onSelectedItemChanged,
     @required List<Widget> children,
@@ -63,6 +86,8 @@ class CupertinoPicker extends StatefulWidget {
        assert(magnification > 0),
        assert(itemExtent != null),
        assert(itemExtent > 0),
+       assert(squeeze != null),
+       assert(squeeze > 0),
        childDelegate = looping
                        ? ListWheelChildLoopingListDelegate(children: children)
                        : ListWheelChildListDelegate(children: children),
@@ -82,17 +107,18 @@ class CupertinoPicker extends StatefulWidget {
   ///
   /// The [itemExtent] argument must be non-null and positive.
   ///
-  /// The [backgroundColor] defaults to light gray. It can be set to null to
-  /// disable the background painting entirely; this is mildly more efficient
-  /// than using [Colors.transparent].
+  /// The [backgroundColor] defaults to null, which disables background painting entirely.
+  /// (i.e. the picker is going to have a completely transparent background), to match
+  /// the native UIPicker and UIDatePicker.
   CupertinoPicker.builder({
     Key key,
     this.diameterRatio = _kDefaultDiameterRatio,
-    this.backgroundColor = _kDefaultBackground,
+    this.backgroundColor,
     this.offAxisFraction = 0.0,
     this.useMagnifier = false,
     this.magnification = 1.0,
     this.scrollController,
+    this.squeeze = _kSqueeze,
     @required this.itemExtent,
     @required this.onSelectedItemChanged,
     @required IndexedWidgetBuilder itemBuilder,
@@ -103,6 +129,8 @@ class CupertinoPicker extends StatefulWidget {
        assert(magnification > 0),
        assert(itemExtent != null),
        assert(itemExtent > 0),
+       assert(squeeze != null),
+       assert(squeeze > 0),
        childDelegate = ListWheelChildBuilderDelegate(builder: itemBuilder, childCount: childCount),
        super(key: key);
 
@@ -117,10 +145,12 @@ class CupertinoPicker extends StatefulWidget {
 
   /// Background color behind the children.
   ///
-  /// Defaults to a gray color in the iOS color palette.
+  /// Defaults to null, which disables background painting entirely.
+  /// (i.e. the picker is going to have a completely transparent background), to match
+  /// the native UIPicker and UIDatePicker.
   ///
-  /// This can be set to null to disable the background painting entirely; this
-  /// is mildly more efficient than using [Colors.transparent].
+  /// Any alpha value less 255 (fully opaque) will cause the removal of the
+  /// wheel list edge fade gradient from rendering of the widget.
   final Color backgroundColor;
 
   /// {@macro flutter.rendering.wheelList.offAxisFraction}
@@ -132,7 +162,8 @@ class CupertinoPicker extends StatefulWidget {
   /// {@macro flutter.rendering.wheelList.magnification}
   final double magnification;
 
-  /// A [FixedExtentScrollController] to read and control the current item.
+  /// A [FixedExtentScrollController] to read and control the current item, and
+  /// to set the initial item.
   ///
   /// If null, an implicit one will be created internally.
   final FixedExtentScrollController scrollController;
@@ -142,6 +173,11 @@ class CupertinoPicker extends StatefulWidget {
   /// All children will be given the [BoxConstraints] to match this exact
   /// height. Must not be null and must be positive.
   final double itemExtent;
+
+  /// {@macro flutter.rendering.wheelList.squeeze}
+  ///
+  /// Defaults to `1.45` to visually mimic iOS.
+  final double squeeze;
 
   /// An option callback when the currently centered item changes.
   ///
@@ -161,12 +197,51 @@ class CupertinoPicker extends StatefulWidget {
 
 class _CupertinoPickerState extends State<CupertinoPicker> {
   int _lastHapticIndex;
+  FixedExtentScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.scrollController == null) {
+      _controller = FixedExtentScrollController();
+    }
+  }
+
+  @override
+  void didUpdateWidget(CupertinoPicker oldWidget) {
+    if (widget.scrollController != null && oldWidget.scrollController == null) {
+      _controller = null;
+    } else if (widget.scrollController == null && oldWidget.scrollController != null) {
+      assert(_controller == null);
+      _controller = FixedExtentScrollController();
+    }
+    super.didUpdateWidget(oldWidget);
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
   void _handleSelectedItemChanged(int index) {
     // Only the haptic engine hardware on iOS devices would produce the
     // intended effects.
-    if (defaultTargetPlatform == TargetPlatform.iOS
-        && index != _lastHapticIndex) {
+    bool hasSuitableHapticHardware;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        hasSuitableHapticHardware = true;
+        break;
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        hasSuitableHapticHardware = false;
+        break;
+    }
+    assert(hasSuitableHapticHardware != null);
+    if (hasSuitableHapticHardware && index != _lastHapticIndex) {
       _lastHapticIndex = index;
       HapticFeedback.selectionClick();
     }
@@ -176,101 +251,169 @@ class _CupertinoPickerState extends State<CupertinoPicker> {
     }
   }
 
-  /// Makes the fade to white edge gradients.
-  Widget _buildGradientScreen() {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: <Color>[
-                Color(0xFFFFFFFF),
-                Color(0xF2FFFFFF),
-                Color(0xDDFFFFFF),
-                Color(0x00FFFFFF),
-                Color(0x00FFFFFF),
-                Color(0xDDFFFFFF),
-                Color(0xF2FFFFFF),
-                Color(0xFFFFFFFF),
-              ],
-              stops: <double>[
-                0.0, 0.05, 0.09, 0.22, 0.78, 0.91, 0.95, 1.0,
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Makes the magnifier lens look so that the colors are normal through
-  /// the lens and partially grayed out around it.
+  /// Draws the magnifier borders.
   Widget _buildMagnifierScreen() {
-    final Color foreground = widget.backgroundColor?.withAlpha(
-      (widget.backgroundColor.alpha * _kForegroundScreenOpacityFraction).toInt()
-    );
+    final Color resolvedBorderColor = CupertinoDynamicColor.resolve(_kHighlighterBorder, context);
 
     return IgnorePointer(
-      child: Column(
-        children: <Widget>[
-          Expanded(
-            child: Container(
-              color: foreground,
+      child: Center(
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(width: 0.0, color: resolvedBorderColor),
+              bottom: BorderSide(width: 0.0, color: resolvedBorderColor),
             ),
           ),
-          Container(
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(width: 0.0, color: _kHighlighterBorder),
-                bottom: BorderSide(width: 0.0, color: _kHighlighterBorder),
-              )
-            ),
-            constraints: BoxConstraints.expand(
-                height: widget.itemExtent * widget.magnification,
-            ),
+          constraints: BoxConstraints.expand(
+            height: widget.itemExtent * widget.magnification,
           ),
-          Expanded(
-            child: Container(
-              color: foreground,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget result = Stack(
-      children: <Widget>[
-        Positioned.fill(
-          child: ListWheelScrollView.useDelegate(
-            controller: widget.scrollController,
-            physics: const FixedExtentScrollPhysics(),
-            diameterRatio: widget.diameterRatio,
-            perspective: _kDefaultPerspective,
-            offAxisFraction: widget.offAxisFraction,
-            useMagnifier: widget.useMagnifier,
-            magnification: widget.magnification,
-            itemExtent: widget.itemExtent,
-            onSelectedItemChanged: _handleSelectedItemChanged,
-            childDelegate: widget.childDelegate,
+    final Color resolvedBackgroundColor = CupertinoDynamicColor.resolve(widget.backgroundColor, context);
+
+    final Widget result = DefaultTextStyle(
+      style: CupertinoTheme.of(context).textTheme.pickerTextStyle,
+      child: Stack(
+        children: <Widget>[
+          Positioned.fill(
+            child: _CupertinoPickerSemantics(
+              scrollController: widget.scrollController ?? _controller,
+              child: ListWheelScrollView.useDelegate(
+                controller: widget.scrollController ?? _controller,
+                physics: const FixedExtentScrollPhysics(),
+                diameterRatio: widget.diameterRatio,
+                perspective: _kDefaultPerspective,
+                offAxisFraction: widget.offAxisFraction,
+                useMagnifier: widget.useMagnifier,
+                magnification: widget.magnification,
+                overAndUnderCenterOpacity: _kOverAndUnderCenterOpacity,
+                itemExtent: widget.itemExtent,
+                squeeze: widget.squeeze,
+                onSelectedItemChanged: _handleSelectedItemChanged,
+                childDelegate: widget.childDelegate,
+              ),
+            ),
           ),
-        ),
-        _buildGradientScreen(),
-        _buildMagnifierScreen(),
-      ],
+          _buildMagnifierScreen(),
+        ],
+      ),
     );
-    if (widget.backgroundColor != null) {
-      result = DecoratedBox(
-        decoration: BoxDecoration(
-          color: widget.backgroundColor,
-        ),
-        child: result,
-      );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(color: resolvedBackgroundColor),
+      child: result,
+    );
+  }
+}
+
+// Turns the scroll semantics of the ListView into a single adjustable semantics
+// node. This is done by removing all of the child semantics of the scroll
+// wheel and using the scroll indexes to look up the current, previous, and
+// next semantic label. This label is then turned into the value of a new
+// adjustable semantic node, with adjustment callbacks wired to move the
+// scroll controller.
+class _CupertinoPickerSemantics extends SingleChildRenderObjectWidget {
+  const _CupertinoPickerSemantics({
+    Key key,
+    Widget child,
+    @required this.scrollController,
+  }) : super(key: key, child: child);
+
+  final FixedExtentScrollController scrollController;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderCupertinoPickerSemantics(scrollController, Directionality.of(context));
+
+  @override
+  void updateRenderObject(BuildContext context, covariant _RenderCupertinoPickerSemantics renderObject) {
+    renderObject
+      ..textDirection = Directionality.of(context)
+      ..controller = scrollController;
+  }
+}
+
+class _RenderCupertinoPickerSemantics extends RenderProxyBox {
+  _RenderCupertinoPickerSemantics(FixedExtentScrollController controller, this._textDirection) {
+    this.controller = controller;
+  }
+
+  FixedExtentScrollController get controller => _controller;
+  FixedExtentScrollController _controller;
+  set controller(FixedExtentScrollController value) {
+    if (value == _controller)
+      return;
+    if (_controller != null)
+      _controller.removeListener(_handleScrollUpdate);
+    else
+      _currentIndex = value.initialItem ?? 0;
+    value.addListener(_handleScrollUpdate);
+    _controller = value;
+  }
+
+  TextDirection get textDirection => _textDirection;
+  TextDirection _textDirection;
+  set textDirection(TextDirection value) {
+    if (textDirection == value)
+      return;
+    _textDirection = value;
+    markNeedsSemanticsUpdate();
+  }
+
+  int _currentIndex = 0;
+
+  void _handleIncrease() {
+    controller.jumpToItem(_currentIndex + 1);
+  }
+
+  void _handleDecrease() {
+    if (_currentIndex == 0)
+      return;
+    controller.jumpToItem(_currentIndex - 1);
+  }
+
+  void _handleScrollUpdate() {
+    if (controller.selectedItem == _currentIndex)
+      return;
+    _currentIndex = controller.selectedItem;
+    markNeedsSemanticsUpdate();
+  }
+  @override
+  void describeSemanticsConfiguration(SemanticsConfiguration config) {
+    super.describeSemanticsConfiguration(config);
+    config.isSemanticBoundary = true;
+    config.textDirection = textDirection;
+  }
+
+  @override
+  void assembleSemanticsNode(SemanticsNode node, SemanticsConfiguration config, Iterable<SemanticsNode> children) {
+    if (children.isEmpty)
+      return super.assembleSemanticsNode(node, config, children);
+    final SemanticsNode scrollable = children.first;
+    final Map<int, SemanticsNode> indexedChildren = <int, SemanticsNode>{};
+    scrollable.visitChildren((SemanticsNode child) {
+      assert(child.indexInParent != null);
+      indexedChildren[child.indexInParent] = child;
+      return true;
+    });
+    if (indexedChildren[_currentIndex] == null) {
+      return node.updateWith(config: config);
     }
-    return result;
+    config.value = indexedChildren[_currentIndex].label;
+    final SemanticsNode previousChild = indexedChildren[_currentIndex - 1];
+    final SemanticsNode nextChild = indexedChildren[_currentIndex + 1];
+    if (nextChild != null) {
+      config.increasedValue = nextChild.label;
+      config.onIncrease = _handleIncrease;
+    }
+    if (previousChild != null) {
+      config.decreasedValue = previousChild.label;
+      config.onDecrease = _handleDecrease;
+    }
+    node.updateWith(config: config);
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 
 import 'semantics_tester.dart';
 
@@ -20,14 +21,10 @@ void main() {
 
   testWidgets('scrollable exposes the correct semantic actions', (WidgetTester tester) async {
     semantics = SemanticsTester(tester);
-
-    final List<Widget> textWidgets = <Widget>[];
-    for (int i = 0; i < 80; i++)
-      textWidgets.add(Text('$i'));
     await tester.pumpWidget(
       Directionality(
         textDirection: TextDirection.ltr,
-        child: ListView(children: textWidgets),
+        child: ListView(children: List<Widget>.generate(80, (int i) => Text('$i'))),
       ),
     );
 
@@ -53,12 +50,12 @@ void main() {
 
     const double kItemHeight = 40.0;
 
-    final List<Widget> containers = <Widget>[];
-    for (int i = 0; i < 80; i++)
-      containers.add(MergeSemantics(child: Container(
+    final List<Widget> containers = List<Widget>.generate(80, (int i) => MergeSemantics(
+      child: Container(
         height: kItemHeight,
         child: Text('container $i', textDirection: TextDirection.ltr),
-      )));
+      ),
+    ));
 
     final ScrollController scrollController = ScrollController(
       initialScrollOffset: kItemHeight / 2,
@@ -92,12 +89,12 @@ void main() {
     const double kItemHeight = 100.0;
     const double kExpandedAppBarHeight = 56.0;
 
-    final List<Widget> containers = <Widget>[];
-    for (int i = 0; i < 80; i++)
-      containers.add(MergeSemantics(child: Container(
+    final List<Widget> containers = List<Widget>.generate(80, (int i) => MergeSemantics(
+      child: Container(
         height: kItemHeight,
         child: Text('container $i'),
-      )));
+      ),
+    ));
 
     final ScrollController scrollController = ScrollController(
       initialScrollOffset: kItemHeight / 2,
@@ -128,7 +125,7 @@ void main() {
                   ),
                   SliverList(
                     delegate: SliverChildListDelegate(containers),
-                  )
+                  ),
                 ],
               );
             }),
@@ -195,7 +192,8 @@ void main() {
                       title: Text('App Bar'),
                     ),
                   ),
-                ]..addAll(slivers),
+                  ...slivers,
+                ],
               );
             },
           ),
@@ -217,12 +215,9 @@ void main() {
   testWidgets('correct scrollProgress', (WidgetTester tester) async {
     semantics = SemanticsTester(tester);
 
-    final List<Widget> textWidgets = <Widget>[];
-    for (int i = 0; i < 80; i++)
-      textWidgets.add(Text('$i'));
     await tester.pumpWidget(Directionality(
       textDirection: TextDirection.ltr,
-      child: ListView(children: textWidgets),
+      child: ListView(children: List<Widget>.generate(80, (int i) => Text('$i'))),
     ));
 
     expect(semantics, includesNodeWith(
@@ -266,6 +261,7 @@ void main() {
     await tester.pumpWidget(Directionality(
       textDirection: TextDirection.ltr,
       child: ListView.builder(
+        dragStartBehavior: DragStartBehavior.down,
         itemExtent: 20.0,
         itemBuilder: (BuildContext context, int index) {
           return Text('entry $index');
@@ -312,12 +308,10 @@ void main() {
   testWidgets('Semantics tree is populated mid-scroll', (WidgetTester tester) async {
     semantics = SemanticsTester(tester);
 
-    final List<Widget> children = <Widget>[];
-    for (int i = 0; i < 80; i++)
-      children.add(Container(
-        child: Text('Item $i'),
-        height: 40.0,
-      ));
+    final List<Widget> children = List<Widget>.generate(80, (int i) => Container(
+      child: Text('Item $i'),
+      height: 40.0,
+    ));
     await tester.pumpWidget(
       Directionality(
         textDirection: TextDirection.ltr,
@@ -403,7 +397,7 @@ void main() {
     expect(semantics, hasSemantics(expectedSemantics, ignoreId: true, ignoreRect: true, ignoreTransform: true));
 
     semantics.dispose();
-  });
+  }, semanticsEnabled: false);
 
   group('showOnScreen', () {
 
@@ -537,7 +531,7 @@ void main() {
                   cacheExtent: 0.0,
                   offset: offset,
                   center: center,
-                  slivers: children
+                  slivers: children,
                 );
               },
             ),

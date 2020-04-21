@@ -1,8 +1,7 @@
 @ECHO off
-REM Copyright 2017 The Chromium Authors. All rights reserved.
+REM Copyright 2014 The Flutter Authors. All rights reserved.
 REM Use of this source code is governed by a BSD-style license that can be
 REM found in the LICENSE file.
-
 
 REM ---------------------------------- NOTE ----------------------------------
 REM
@@ -40,7 +39,7 @@ IF NOT EXIST "%flutter_root%\.git" (
   ECHO Error: The Flutter directory is not a clone of the GitHub project.
   ECHO        The flutter tool requires Git in order to operate properly;
   ECHO        to set up Flutter, run the following command:
-  ECHO        git clone -b beta https://github.com/flutter/flutter.git
+  ECHO        git clone -b stable https://github.com/flutter/flutter.git
   EXIT /B 1
 )
 
@@ -60,7 +59,7 @@ IF NOT EXIST "%cache_dir%" (
 
 
 REM To debug the tool, you can uncomment the following lines to enable checked mode and set an observatory port:
-REM SET FLUTTER_TOOL_ARGS="--checked %FLUTTER_TOOL_ARGS%"
+REM SET FLUTTER_TOOL_ARGS="--enable-asserts %FLUTTER_TOOL_ARGS%"
 REM SET FLUTTER_TOOL_ARGS="%FLUTTER_TOOL_ARGS% --observe=65432"
 
 :acquire_lock
@@ -89,9 +88,12 @@ GOTO :after_subroutine
   SET pubspec_yaml_path=%flutter_tools_dir%\pubspec.yaml
   SET pubspec_lock_path=%flutter_tools_dir%\pubspec.lock
   FOR /F %%i IN ('DIR /B /O:D "%pubspec_yaml_path%" "%pubspec_lock_path%"') DO SET newer_file=%%i
+  FOR %%i IN (%pubspec_yaml_path%) DO SET pubspec_yaml_timestamp=%%~ti
+  FOR %%i IN (%pubspec_lock_path%) DO SET pubspec_lock_timestamp=%%~ti
+  IF "%pubspec_yaml_timestamp%" == "%pubspec_lock_timestamp%" SET newer_file=""
   IF "%newer_file%" EQU "pubspec.yaml" GOTO do_snapshot
 
-  REM Everything is uptodate - exit subroutine
+  REM Everything is up-to-date - exit subroutine
   EXIT /B
 
   :do_sdk_update_and_snapshot
@@ -133,9 +135,9 @@ GOTO :after_subroutine
       SET /A remaining_tries=%total_tries%-1
       :retry_pub_upgrade
         ECHO Running pub upgrade...
-        CALL "%pub%" upgrade "%VERBOSITY%" --no-packages-dir
+        CALL "%pub%" upgrade "%VERBOSITY%" --no-precompile
         IF "%ERRORLEVEL%" EQU "0" goto :upgrade_succeeded
-        ECHO Error Unable to 'pub upgrade' flutter tool. Retrying in five seconds... (%remaining_tries% tries left)
+        ECHO Error (%ERRORLEVEL%): Unable to 'pub upgrade' flutter tool. Retrying in five seconds... (%remaining_tries% tries left)
         timeout /t 5 /nobreak 2>NUL
         SET /A remaining_tries-=1
         IF "%remaining_tries%" EQU "0" GOTO upgrade_retries_exhausted
@@ -149,7 +151,11 @@ GOTO :after_subroutine
 
     POPD
 
-    "%dart%" --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"
+    IF "%FLUTTER_TOOL_ARGS%" == "" (
+      "%dart%" --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" --no-enable-mirrors "%script_path%"
+    ) else (
+      "%dart%" "%FLUTTER_TOOL_ARGS%" --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"
+    )
     IF "%ERRORLEVEL%" NEQ "0" (
       ECHO Error: Unable to create dart snapshot for flutter tool.
       SET exit_code=%ERRORLEVEL%
@@ -164,13 +170,13 @@ GOTO :after_subroutine
 
 REM Chaining the call to 'dart' and 'exit' with an ampersand ensures that
 REM Windows reads both commands into memory once before executing them. This
-REM avoids nasty errors that may otherwise occure when the dart command (e.g. as
+REM avoids nasty errors that may otherwise occur when the dart command (e.g. as
 REM part of 'flutter upgrade') modifies this batch script while it is executing.
 REM
 REM Do not use the CALL command in the next line to execute Dart. CALL causes
 REM Windows to re-read the line from disk after the CALL command has finished
 REM regardless of the ampersand chain.
-"%dart%" %FLUTTER_TOOL_ARGS% "%snapshot_path%" %* & exit /B !ERRORLEVEL!
+"%dart%" --packages="%flutter_tools_dir%\.packages" %FLUTTER_TOOL_ARGS% "%snapshot_path%" %* & exit /B !ERRORLEVEL!
 
 :final_exit
 EXIT /B %exit_code%

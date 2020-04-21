@@ -1,7 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -380,7 +381,7 @@ void main() {
     }
 
     final ControlsWidgetBuilder builder =
-      (BuildContext context, {VoidCallback onStepContinue, VoidCallback onStepCancel}) {
+      (BuildContext context, { VoidCallback onStepContinue, VoidCallback onStepCancel }) {
         return Container(
           margin: const EdgeInsets.only(top: 16.0),
           child: ConstrainedBox(
@@ -478,6 +479,74 @@ void main() {
     expect(find.text('!'), findsOneWidget);
   });
 
+  testWidgets('Nested stepper error test', (WidgetTester tester) async {
+    FlutterErrorDetails errorDetails;
+    final FlutterExceptionHandler oldHandler = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      errorDetails = details;
+    };
+    try {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Material(
+            child: Stepper(
+              type: StepperType.horizontal,
+              steps: <Step>[
+                Step(
+                  title: const Text('Step 2'),
+                  content:  Stepper(
+                    type: StepperType.vertical,
+                    steps: const <Step>[
+                      Step(
+                        title: Text('Nested step 1'),
+                        content: Text('A'),
+                      ),
+                      Step(
+                        title: Text('Nested step 2'),
+                        content: Text('A'),
+                      ),
+                    ],
+                  ),
+                ),
+                const Step(
+                  title: Text('Step 1'),
+                  content: Text('A'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } finally {
+      FlutterError.onError = oldHandler;
+    }
+
+    expect(errorDetails, isNotNull);
+    expect(errorDetails.stack, isNotNull);
+    // Check the ErrorDetails without the stack trace
+    final String fullErrorMessage = errorDetails.toString();
+    final List<String> lines = fullErrorMessage.split('\n');
+    // The lines in the middle of the error message contain the stack trace
+    // which will change depending on where the test is run.
+    final String errorMessage = lines.takeWhile(
+      (String line) => line != '',
+    ).join('\n');
+    expect(errorMessage.length, lessThan(fullErrorMessage.length));
+    expect(errorMessage, startsWith(
+      '══╡ EXCEPTION CAUGHT BY WIDGETS LIBRARY ╞════════════════════════\n'
+      'The following assertion was thrown building Stepper('
+    ));
+    // The description string of the stepper looks slightly different depending
+    // on the platform and is omitted here.
+    expect(errorMessage, endsWith(
+      '):\n'
+      'Steppers must not be nested.\n'
+      'The material specification advises that one should avoid\n'
+      'embedding steppers within steppers.\n'
+      'https://material.io/archive/guidelines/components/steppers.html#steppers-usage'
+    ));
+  });
+
   ///https://github.com/flutter/flutter/issues/16920
   testWidgets('Stepper icons size test', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -506,5 +575,90 @@ void main() {
 
     renderObject = tester.renderObject(find.byIcon(Icons.check));
     expect(renderObject.size, equals(const Size.square(18.0)));
+  });
+
+  testWidgets('Stepper physics scroll error test', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: ListView(
+            children: <Widget>[
+              Stepper(
+                steps: const <Step>[
+                  Step(title: Text('Step 1'), content: Text('Text 1')),
+                  Step(title: Text('Step 2'), content: Text('Text 2')),
+                  Step(title: Text('Step 3'), content: Text('Text 3')),
+                  Step(title: Text('Step 4'), content: Text('Text 4')),
+                  Step(title: Text('Step 5'), content: Text('Text 5')),
+                  Step(title: Text('Step 6'), content: Text('Text 6')),
+                  Step(title: Text('Step 7'), content: Text('Text 7')),
+                  Step(title: Text('Step 8'), content: Text('Text 8')),
+                  Step(title: Text('Step 9'), content: Text('Text 9')),
+                  Step(title: Text('Step 10'), content: Text('Text 10')),
+                ],
+              ),
+              const Text('Text After Stepper'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.fling(find.byType(Stepper), const Offset(0.0, -100.0), 1000.0);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Text After Stepper'), findsNothing);
+  });
+
+  testWidgets("Vertical Stepper can't be focused when disabled.", (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Stepper(
+            currentStep: 0,
+            type: StepperType.vertical,
+            steps: const <Step>[
+              Step(
+                title: Text('Step 0'),
+                state: StepState.disabled,
+                content: Text('Text 0'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final FocusNode disabledNode = Focus.of(tester.element(find.text('Step 0')), nullOk: true, scopeOk: true);
+    disabledNode.requestFocus();
+    await tester.pump();
+    expect(disabledNode.hasPrimaryFocus, isFalse);
+  });
+
+  testWidgets("Horizontal Stepper can't be focused when disabled.", (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Stepper(
+            currentStep: 0,
+            type: StepperType.horizontal,
+            steps: const <Step>[
+              Step(
+                title: Text('Step 0'),
+                state: StepState.disabled,
+                content: Text('Text 0'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final FocusNode disabledNode = Focus.of(tester.element(find.text('Step 0')), nullOk: true, scopeOk: true);
+    disabledNode.requestFocus();
+    await tester.pump();
+    expect(disabledNode.hasPrimaryFocus, isFalse);
   });
 }
